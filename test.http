@@ -72,11 +72,11 @@ Authorization: Token d5791949efd5d4928e04caefce748b2fe2e98335
 #####################
 
 ### ESP32 Panic Button
-POST http://localhost:8000/api/panic/
+POST https://resq-server.onrender.com/api/panic/
 Content-Type: application/json
 
 {
-  "device_id": "ESP32-001"
+  "device_id": "ESP32-002"
 }
 
 ###
