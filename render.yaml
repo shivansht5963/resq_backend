@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: resq-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py migrate && gunicorn campus_security.wsgi:application --bind 0.0.0.0:$PORT
+    plan: free
+    healthCheckPath: /accounts/
+    envVars:
+      - key: DEBUG
+        value: "True"
+      - key: DJANGO_SETTINGS_MODULE
+        value: campus_security.settings
