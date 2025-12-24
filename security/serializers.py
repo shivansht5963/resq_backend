@@ -38,36 +38,22 @@ class GuardAssignmentSerializer(serializers.ModelSerializer):
     """Serializer for GuardAssignment model."""
 
     guard = serializers.StringRelatedField(read_only=True)
-    reported_incident = serializers.StringRelatedField(read_only=True)
-    beacon_incident = serializers.StringRelatedField(read_only=True)
-    panic_incident = serializers.StringRelatedField(read_only=True)
+    incident = serializers.StringRelatedField(read_only=True)
     guard_id = serializers.PrimaryKeyRelatedField(
         queryset=__import__('accounts.models', fromlist=['User']).User.objects.filter(role='GUARD'),
         source='guard',
         write_only=True
     )
-    reported_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['ReportedIncident']).ReportedIncident.objects.all(),
-        source='reported_incident',
+    incident_id = serializers.PrimaryKeyRelatedField(
+        queryset=__import__('incidents.models', fromlist=['Incident']).Incident.objects.all(),
+        source='incident',
         write_only=True,
-        required=False
-    )
-    beacon_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['BeaconIncident']).BeaconIncident.objects.all(),
-        source='beacon_incident',
-        write_only=True,
-        required=False
-    )
-    panic_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['PanicButtonIncident']).PanicButtonIncident.objects.all(),
-        source='panic_incident',
-        write_only=True,
-        required=False
+        required=True
     )
 
     class Meta:
         model = GuardAssignment
-        fields = ('id', 'guard', 'guard_id', 'reported_incident', 'reported_incident_id', 'beacon_incident', 'beacon_incident_id', 'panic_incident', 'panic_incident_id', 'is_active', 'assigned_at', 'updated_at')
+        fields = ('id', 'guard', 'guard_id', 'incident', 'incident_id', 'is_active', 'assigned_at', 'updated_at')
         read_only_fields = ('id', 'assigned_at', 'updated_at')
 
 
@@ -94,7 +80,7 @@ class GuardAlertSerializer(serializers.ModelSerializer):
         source='incident',
         read_only=True
     )
-    guard_name = serializers.CharField(source='guard.user.full_name', read_only=True)
+    guard_name = serializers.CharField(source='guard.full_name', read_only=True)
     guard_id = serializers.PrimaryKeyRelatedField(
         source='guard',
         read_only=True
@@ -102,8 +88,8 @@ class GuardAlertSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = GuardAlert
-        fields = ('id', 'incident_id', 'guard_id', 'guard_name', 'distance_km', 'status', 'priority_rank', 'sent_at', 'acknowledged_at', 'updated_at')
-        read_only_fields = ('id', 'sent_at', 'acknowledged_at', 'updated_at')
+        fields = ('id', 'incident_id', 'guard_id', 'guard_name', 'distance_km', 'status', 'priority_rank', 'alert_sent_at', 'updated_at')
+        read_only_fields = ('id', 'alert_sent_at', 'updated_at')
 
 
 class GuardAlertDetailSerializer(serializers.ModelSerializer):
@@ -114,22 +100,16 @@ class GuardAlertDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = GuardAlert
-        fields = ('id', 'incident', 'guard', 'distance_km', 'status', 'priority_rank', 'sent_at', 'acknowledged_at', 'updated_at')
-        read_only_fields = ('id', 'sent_at', 'acknowledged_at', 'updated_at')
+        fields = ('id', 'incident', 'guard', 'distance_km', 'status', 'priority_rank', 'alert_sent_at', 'updated_at')
+        read_only_fields = ('id', 'alert_sent_at', 'updated_at')
     
     def get_incident(self, obj):
-        from incidents.serializers import IncidentSerializer
-        return IncidentSerializer(obj.incident).data
+        from incidents.serializers import IncidentDetailedSerializer
+        return IncidentDetailedSerializer(obj.incident).data
     
     def get_guard(self, obj):
         return {
             'id': obj.guard.id,
-            'name': obj.guard.user.full_name,
-            'email': obj.guard.user.email,
-            'is_available': obj.guard.is_available,
-            'location': {
-                'latitude': obj.guard.last_known_latitude,
-                'longitude': obj.guard.last_known_longitude,
-                'updated_at': obj.guard.last_location_update
-            }
+            'name': obj.guard.full_name,
+            'email': obj.guard.email
         }

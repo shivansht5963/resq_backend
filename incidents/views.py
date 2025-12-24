@@ -1,17 +1,23 @@
 """
-ViewSets for incidents app.
+ViewSets for unified incident management.
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.db.models import Q
-from .models import Beacon, ReportedIncident, BeaconIncident, PanicButtonIncident, ESP32Device
+from django.db import transaction
+from .models import Beacon, Incident, IncidentSignal, ESP32Device
 from .serializers import (
-    BeaconSerializer, 
-    ReportedIncidentSerializer, BeaconIncidentSerializer, PanicButtonIncidentSerializer
+    BeaconSerializer,
+    IncidentDetailedSerializer,
+    IncidentListSerializer,
+    IncidentCreateSerializer
 )
-from accounts.permissions import IsStudent, IsGuard, IsStudentOwner
+from .services import (
+    get_or_create_incident_with_signals,
+    alert_guards_for_incident
+)
+from accounts.permissions import IsStudent, IsGuard
 
 
 class BeaconViewSet(viewsets.ReadOnlyModelViewSet):
@@ -26,108 +32,132 @@ class BeaconViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
 
-class ReportedIncidentViewSet(viewsets.ModelViewSet):
+class IncidentViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Student Reported Incidents (beacon is optional).
+    Unified ViewSet for all incidents.
     
-    GET /api/reported-incidents/ - List incidents (filtered by role)
-    POST /api/reported-incidents/ - Create new incident (STUDENT only)
-    GET /api/reported-incidents/{id}/ - Get incident details
-    PATCH /api/reported-incidents/{id}/ - Update incident (ADMIN only)
+    GET    /api/incidents/              - List incidents (filtered by role)
+    POST   /api/incidents/              - Create incident (admin only)
+    GET    /api/incidents/{id}/         - Get incident details + all signals
+    PATCH  /api/incidents/{id}/         - Update incident status/priority
+    POST   /api/incidents/{id}/resolve/ - Mark as RESOLVED
     """
     permission_classes = [IsAuthenticated]
-    serializer_class = ReportedIncidentSerializer
     
     def get_queryset(self):
         user = self.request.user
         
-        # Students see only their own incidents
+        # Students see only incidents they were involved in
         if user.role == 'STUDENT':
-            return ReportedIncident.objects.filter(student=user)
+            return Incident.objects.filter(
+                signals__source_user=user
+            ).distinct().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
         
-        # Guards see all reported incidents
+        # Guards see all incidents (for their location/nearby)
         if user.role == 'GUARD':
-            return ReportedIncident.objects.all()
+            return Incident.objects.all().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
         
-        # Admins see all incidents
-        return ReportedIncident.objects.all()
+        # Admins see all
+        return Incident.objects.all().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
     
-    def perform_create(self, serializer):
-        """Create incident with current user as student."""
-        if self.request.user.role != 'STUDENT':
-            raise PermissionError("Only students can create incidents")
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return IncidentDetailedSerializer
+        if self.action == 'list':
+            return IncidentListSerializer
+        return IncidentDetailedSerializer
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def report_sos(self, request):
+        """
+        Student reports emergency via SOS.
         
-        incident = serializer.save(student=self.request.user)
+        POST /api/incidents/report-sos/
         
-        # Auto-alert nearest guards if beacon is provided
-        if incident.beacon:
-            from security.utils import get_top_n_nearest_guards
-            from security.models import GuardAlert
-            
-            nearest_guards = get_top_n_nearest_guards(
-                incident.beacon,
-                n=3,
-                max_distance_km=1.0
+        Request:
+        {
+            "beacon_id": "uuid",
+            "description": "Optional description"
+        }
+        """
+        serializer = IncidentCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        if request.user.role != 'STUDENT':
+            return Response(
+                {'error': 'Only students can report SOS'},
+                status=status.HTTP_403_FORBIDDEN
             )
-            
-            for rank, (guard_profile, distance_km) in enumerate(nearest_guards, 1):
-                GuardAlert.objects.create(
-                    reported_incident=incident,
-                    guard=guard_profile,
-                    distance_km=distance_km,
-                    priority_rank=rank,
-                    status='SENT'
-                )
-
-
-class BeaconIncidentViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Automatic Beacon Incidents (beacon detection).
-    
-    GET /api/beacon-incidents/ - List beacon incidents
-    GET /api/beacon-incidents/{id}/ - Get incident details
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = BeaconIncidentSerializer
-    
-    def get_queryset(self):
-        user = self.request.user
         
-        # Students see only their own incidents
-        if user.role == 'STUDENT':
-            return BeaconIncident.objects.filter(student=user)
+        try:
+            incident, created, signal = get_or_create_incident_with_signals(
+                beacon_id=serializer.validated_data['beacon_id'],
+                signal_type=IncidentSignal.SignalType.STUDENT_SOS,
+                source_user_id=request.user.id,
+                description=serializer.validated_data.get('description', '')
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Guards and Admins see all
-        return BeaconIncident.objects.all()
-
-
-class PanicButtonIncidentViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Panic Button Incidents.
+        # Only alert guards if incident was newly created
+        if created:
+            alert_guards_for_incident(incident)
+        
+        response_data = {
+            'status': 'incident_created' if created else 'signal_added_to_existing',
+            'incident_id': str(incident.id),
+            'signal_id': signal.id,
+            'incident': IncidentDetailedSerializer(incident).data
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
-    GET /api/panic-incidents/ - List panic incidents
-    GET /api/panic-incidents/{id}/ - Get incident details
-    """
-    permission_classes = [IsAuthenticated]
-    serializer_class = PanicButtonIncidentSerializer
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        """
+        Mark incident as RESOLVED.
+        
+        POST /api/incidents/{id}/resolve/
+        """
+        incident = self.get_object()
+        
+        incident.status = Incident.Status.RESOLVED
+        incident.save()
+        
+        # Deactivate any active assignment
+        from security.models import GuardAssignment
+        GuardAssignment.objects.filter(
+            incident=incident,
+            is_active=True
+        ).update(is_active=False)
+        
+        return Response(
+            IncidentDetailedSerializer(incident).data,
+            status=status.HTTP_200_OK
+        )
     
-    def get_queryset(self):
-        user = self.request.user
+    @action(detail=True, methods=['get'])
+    def signals(self, request, pk=None):
+        """
+        Get all signals for an incident.
         
-        # Students see only their own incidents
-        if user.role == 'STUDENT':
-            return PanicButtonIncident.objects.filter(student=user)
+        GET /api/incidents/{id}/signals/
+        """
+        incident = self.get_object()
+        signals = incident.signals.all().order_by('-created_at')
         
-        # Guards and Admins see all
-        return PanicButtonIncident.objects.all()
+        from .serializers import IncidentSignalSerializer
+        serializer = IncidentSignalSerializer(signals, many=True)
+        
+        return Response(serializer.data)
 
 
-# ESP32 Panic Button API (No Authentication Required)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def panic_button_endpoint(request):
     """
-    ESP32 Panic Button API - Trigger emergency incident from panic button.
+    ESP32 Panic Button API - Trigger emergency incident.
     
     POST /api/panic/
     
@@ -138,9 +168,9 @@ def panic_button_endpoint(request):
     
     Response (201 Created):
     {
+        "status": "incident_created" | "signal_added_to_existing",
         "incident_id": "...",
-        "alerts_created": 3,
-        "message": "Emergency alert triggered - 3 guards notified"
+        "alerts_sent": 3
     }
     """
     device_id = request.data.get('device_id')
@@ -151,59 +181,41 @@ def panic_button_endpoint(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Find ESP32 device
     try:
-        esp_device = ESP32Device.objects.get(device_id=device_id)
+        esp_device = ESP32Device.objects.get(device_id=device_id, is_active=True)
     except ESP32Device.DoesNotExist:
         return Response(
-            {'error': f'Device {device_id} not found'},
+            {'error': f'Device {device_id} not found or inactive'},
             status=status.HTTP_404_NOT_FOUND
         )
     
-    if not esp_device.is_active:
-        return Response(
-            {'error': f'Device {device_id} is inactive'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Get beacon from device
-    beacon = esp_device.beacon
-    if not beacon.is_active:
+    if not esp_device.beacon.is_active:
         return Response(
             {'error': 'Device beacon is inactive'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Create panic button incident
-    incident = PanicButtonIncident.objects.create(
-        esp32_device=esp_device,
-        student=None,  # Student unknown for panic button
-        status=PanicButtonIncident.Status.CREATED,
-        priority=PanicButtonIncident.Priority.CRITICAL,
-        description=f"Panic button: {device_id}"
-    )
-    
-    # Auto-alert nearest guards
-    from security.utils import get_top_n_nearest_guards
-    from security.models import GuardAlert
-    
-    nearest_guards = get_top_n_nearest_guards(beacon, n=3, max_distance_km=1.0)
-    
-    alerts_created = 0
-    for rank, (guard_profile, distance_km) in enumerate(nearest_guards, 1):
-        GuardAlert.objects.create(
-            panic_incident=incident,
-            guard=guard_profile,
-            distance_km=distance_km,
-            priority_rank=rank,
-            status='SENT'
+    try:
+        incident, created, signal = get_or_create_incident_with_signals(
+            beacon_id=esp_device.beacon.id,
+            signal_type=IncidentSignal.SignalType.PANIC_BUTTON,
+            source_device_id=esp_device.id,
+            details={'device_id': device_id}
         )
-        alerts_created += 1
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
-    return Response({
+    # Count alerts sent only if incident was newly created
+    alerts_sent = 0
+    if created:
+        alert_guards_for_incident(incident)
+        alerts_sent = incident.guard_alerts.count()
+    
+    response_data = {
+        'status': 'incident_created' if created else 'signal_added_to_existing',
         'incident_id': str(incident.id),
-        'alerts_created': alerts_created,
-        'message': f'Emergency alert triggered - {alerts_created} guards notified',
-        'location': beacon.location_name,
-        'status': 'success'
-    }, status=status.HTTP_201_CREATED)
+        'alerts_sent': alerts_sent,
+        'location': esp_device.beacon.location_name
+    }
+    
+    return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

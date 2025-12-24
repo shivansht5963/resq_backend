@@ -3,8 +3,8 @@ ViewSets for ai_engine app.
 """
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.decorators import api_view, permission_classes
 from .models import AIEvent
 from .serializers import AIEventSerializer, AIEventDetailSerializer
 from accounts.permissions import IsAdmin
@@ -16,8 +16,8 @@ class AIEventViewSet(viewsets.ReadOnlyModelViewSet):
     
     GET /api/ai-events/ - List AI events
     GET /api/ai-events/{id}/ - Get event details
-    POST /api/ai-events/ - Create event (internal, requires authentication)
     """
+    queryset = AIEvent.objects.all()
     serializer_class = AIEventSerializer
     permission_classes = [IsAuthenticated]
     
@@ -25,120 +25,108 @@ class AIEventViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'retrieve':
             return AIEventDetailSerializer
         return AIEventSerializer
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ai_detection_endpoint(request):
+    """
+    AI Detection Endpoint - Log AI detection and trigger incident if high confidence.
     
-    def get_queryset(self):
-        user = self.request.user
-        
-        # Admins see all events
-        if user.role == 'ADMIN':
-            return AIEvent.objects.all()
-        
-        # Guards see events for incidents they're assigned to
-        if user.role == 'GUARD':
-            from security.models import GuardAssignment
-            try:
-                assigned_reported = GuardAssignment.objects.filter(
-                    guard=user.guard_profile, is_active=True
-                ).values_list('reported_incident', flat=True)
-                assigned_beacon = GuardAssignment.objects.filter(
-                    guard=user.guard_profile, is_active=True
-                ).values_list('beacon_incident', flat=True)
-                assigned_panic = GuardAssignment.objects.filter(
-                    guard=user.guard_profile, is_active=True
-                ).values_list('panic_incident', flat=True)
-                
-                from django.db.models import Q
-                return AIEvent.objects.filter(
-                    Q(reported_incident__in=assigned_reported) |
-                    Q(beacon_incident__in=assigned_beacon) |
-                    Q(panic_incident__in=assigned_panic)
-                )
-            except Exception:
-                # Guard profile doesn't exist
-                return AIEvent.objects.none()
-        
-        # Students see events for their own incidents
-        if user.role == 'STUDENT':
-            from django.db.models import Q
-            return AIEvent.objects.filter(
-                Q(reported_incident__student=user) |
-                Q(beacon_incident__student=user) |
-                Q(panic_incident__student=user)
-            )
-        
-        return AIEvent.objects.none()
+    POST /api/ai-detection/
     
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-    def log_event(self, request):
-        """
-        Log a new AI event.
-        
-        Expected payload (choose one incident type):
-        {
-            "reported_incident_id": "uuid",
-            "event_type": "VISION",
-            "confidence_score": 0.95,
-            "details": {...}
+    Request:
+    {
+        "beacon_id": "uuid",
+        "event_type": "VISION" | "AUDIO",
+        "confidence_score": 0.92,
+        "details": {
+            "detected_class": "weapon" | "fight" | "scream",
+            "scream_intensity": 0.92
         }
-        """
-        from incidents.models import ReportedIncident, BeaconIncident, PanicButtonIncident
-        
-        reported_incident_id = request.data.get('reported_incident_id')
-        beacon_incident_id = request.data.get('beacon_incident_id')
-        panic_incident_id = request.data.get('panic_incident_id')
-        event_type = request.data.get('event_type')
-        confidence_score = request.data.get('confidence_score')
-        details = request.data.get('details', {})
-        
-        incident_count = sum([bool(reported_incident_id), bool(beacon_incident_id), bool(panic_incident_id)])
-        if incident_count != 1:
-            return Response(
-                {'error': 'Exactly one incident type must be provided'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            if reported_incident_id:
-                incident_obj = ReportedIncident.objects.get(id=reported_incident_id)
-                ai_event = AIEvent.objects.create(
-                    reported_incident=incident_obj,
-                    event_type=event_type,
-                    confidence_score=confidence_score,
-                    details=details
-                )
-            elif beacon_incident_id:
-                incident_obj = BeaconIncident.objects.get(id=beacon_incident_id)
-                ai_event = AIEvent.objects.create(
-                    beacon_incident=incident_obj,
-                    event_type=event_type,
-                    confidence_score=confidence_score,
-                    details=details
-                )
-            else:  # panic_incident_id
-                incident_obj = PanicButtonIncident.objects.get(id=panic_incident_id)
-                ai_event = AIEvent.objects.create(
-                    panic_incident=incident_obj,
-                    event_type=event_type,
-                    confidence_score=confidence_score,
-                    details=details
-                )
-        except ReportedIncident.DoesNotExist:
-            return Response(
-                {'error': 'Reported incident not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except BeaconIncident.DoesNotExist:
-            return Response(
-                {'error': 'Beacon incident not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except PanicButtonIncident.DoesNotExist:
-            return Response(
-                {'error': 'Panic incident not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
+    }
+    
+    Response:
+    {
+        "status": "incident_created" | "signal_added_to_existing" | "logged_only",
+        "ai_event_id": 123,
+        "incident_id": "uuid" (if created/merged),
+        "signal_id": 456 (if created/merged)
+    }
+    """
+    from incidents.models import Beacon, IncidentSignal
+    from incidents.services import get_or_create_incident_with_signals, alert_guards_for_incident
+    
+    beacon_id = request.data.get('beacon_id')
+    event_type = request.data.get('event_type')
+    confidence_score = request.data.get('confidence_score')
+    details = request.data.get('details', {})
+    
+    if not all([beacon_id, event_type, confidence_score is not None]):
         return Response(
-            AIEventDetailSerializer(ai_event).data,
-            status=status.HTTP_201_CREATED
+            {'error': 'beacon_id, event_type, and confidence_score are required'},
+            status=status.HTTP_400_BAD_REQUEST
         )
+    
+    # Validate beacon
+    try:
+        beacon = Beacon.objects.get(id=beacon_id, is_active=True)
+    except Beacon.DoesNotExist:
+        return Response(
+            {'error': f'Beacon {beacon_id} not found or inactive'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Step 1: Always log the AI event (for analytics/audit)
+    ai_event = AIEvent.objects.create(
+        beacon=beacon,
+        event_type=event_type,
+        confidence_score=confidence_score,
+        details=details
+    )
+    
+    # Step 2: Determine confidence threshold
+    thresholds = {
+        'VISION': 0.75,
+        'AUDIO': 0.80
+    }
+    threshold = thresholds.get(event_type, 0.8)
+    
+    # If confidence is below threshold, return logged_only
+    if confidence_score < threshold:
+        return Response({
+            'status': 'logged_only',
+            'ai_event_id': ai_event.id,
+            'message': f'Confidence {confidence_score:.2f} below threshold {threshold}'
+        }, status=status.HTTP_200_OK)
+    
+    # Step 3: Create incident signal
+    signal_type_map = {
+        'VISION': IncidentSignal.SignalType.AI_VISION,
+        'AUDIO': IncidentSignal.SignalType.AI_AUDIO
+    }
+    signal_type = signal_type_map.get(event_type)
+    
+    try:
+        incident, created, signal = get_or_create_incident_with_signals(
+            beacon_id=beacon_id,
+            signal_type=signal_type,
+            ai_event_id=ai_event.id,
+            details=details
+        )
+    except ValueError as e:
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Step 4: Alert guards only if incident was newly created
+    if created:
+        alert_guards_for_incident(incident)
+    
+    response_data = {
+        'status': 'incident_created' if created else 'signal_added_to_existing',
+        'ai_event_id': ai_event.id,
+        'incident_id': str(incident.id),
+        'signal_id': signal.id,
+        'location': beacon.location_name
+    }
+    
+    return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

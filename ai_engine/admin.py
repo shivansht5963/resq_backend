@@ -4,13 +4,13 @@ from .models import AIEvent
 
 @admin.register(AIEvent)
 class AIEventAdmin(admin.ModelAdmin):
-    list_display = ('reported_incident', 'beacon_incident', 'panic_incident', 'event_type', 'confidence_score', 'created_at')
+    list_display = ('beacon', 'event_type', 'confidence_score', 'created_at')
     list_filter = ('event_type', 'created_at')
-    search_fields = ('reported_incident__id', 'beacon_incident__id', 'panic_incident__id')
+    search_fields = ('beacon__uuid', 'beacon__name')
     ordering = ('-created_at',)
-    readonly_fields = ('reported_incident', 'beacon_incident', 'panic_incident', 'event_type', 'confidence_score', 'created_at', 'details')
+    readonly_fields = ('beacon', 'event_type', 'confidence_score', 'created_at', 'details')
     fieldsets = (
-        ('AI Detection', {'fields': ('reported_incident', 'beacon_incident', 'panic_incident', 'event_type')}),
+        ('AI Detection', {'fields': ('beacon', 'event_type')}),
         ('Confidence', {'fields': ('confidence_score',)}),
         ('Details', {'fields': ('details',)}),
         ('Metadata', {'fields': ('created_at',)}),

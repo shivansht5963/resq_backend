@@ -155,16 +155,21 @@ class GuardAlertViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def acknowledge(self, request, pk=None):
         """Guard acknowledges the alert and will respond."""
+        from incidents.services import handle_guard_alert_acknowledged
+        
         alert = self.get_object()
-        alert.status = GuardAlert.AlertStatus.ACKNOWLEDGED
-        alert.acknowledged_at = timezone.now()
-        alert.save()
+        handle_guard_alert_acknowledged(alert)
+        
+        from security.serializers import GuardAlertDetailSerializer
         return Response(GuardAlertDetailSerializer(alert).data)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def decline(self, request, pk=None):
         """Guard declines the alert (busy or unavailable)."""
+        from incidents.services import handle_guard_alert_declined
+        
         alert = self.get_object()
-        alert.status = GuardAlert.AlertStatus.DECLINED
-        alert.save()
+        handle_guard_alert_declined(alert)
+        
+        from security.serializers import GuardAlertDetailSerializer
         return Response(GuardAlertDetailSerializer(alert).data)

@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Beacon, ReportedIncident, BeaconIncident, PanicButtonIncident, ESP32Device
+from .models import Beacon, Incident, IncidentSignal, ESP32Device
+from security.models import GuardAssignment, GuardAlert
+from chat.models import Conversation, Message
 
 
 class BeaconSerializer(serializers.ModelSerializer):
@@ -7,73 +9,169 @@ class BeaconSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Beacon
-        fields = ('id', 'uuid', 'major', 'minor', 'location_name', 'building', 'floor', 'created_at')
+        fields = ('id', 'beacon_id', 'uuid', 'major', 'minor', 'location_name', 'building', 'floor', 'latitude', 'longitude', 'is_active', 'created_at')
         read_only_fields = ('id', 'created_at')
 
 
-class ReportedIncidentSerializer(serializers.ModelSerializer):
-    """Serializer for ReportedIncident - student manually reported incidents."""
+class ESP32DeviceSerializer(serializers.ModelSerializer):
+    """Serializer for ESP32Device."""
 
-    student = serializers.StringRelatedField(read_only=True)
     beacon = BeaconSerializer(read_only=True)
-    beacon_id = serializers.PrimaryKeyRelatedField(
-        queryset=Beacon.objects.all(),
-        source='beacon',
-        write_only=True,
-        required=False,
-        allow_null=True,
-        help_text="Optional: Beacon location where incident occurred"
-    )
 
     class Meta:
-        model = ReportedIncident
-        fields = (
-            'id', 'student', 'beacon', 'beacon_id',
-            'status', 'priority', 'description',
-            'created_at', 'updated_at'
-        )
+        model = ESP32Device
+        fields = ('id', 'device_id', 'beacon', 'name', 'is_active')
+        read_only_fields = ('id',)
+
+
+class IncidentSignalSerializer(serializers.ModelSerializer):
+    """Serializer for IncidentSignal - individual triggers."""
+
+    source_user = serializers.SerializerMethodField()
+    source_device = ESP32DeviceSerializer(read_only=True)
+    
+    class Meta:
+        model = IncidentSignal
+        fields = ('id', 'signal_type', 'source_user', 'source_device', 'ai_event', 'details', 'created_at')
+        read_only_fields = ('id', 'created_at')
+    
+    def get_source_user(self, obj):
+        if obj.source_user:
+            return {
+                'id': str(obj.source_user.id),
+                'full_name': obj.source_user.full_name,
+                'email': obj.source_user.email
+            }
+        return None
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    """Serializer for Message."""
+
+    sender = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ('id', 'sender', 'message_text', 'created_at')
+        read_only_fields = ('id', 'sender', 'created_at')
+    
+    def get_sender(self, obj):
+        return {
+            'id': str(obj.sender.id),
+            'full_name': obj.sender.full_name,
+            'email': obj.sender.email
+        }
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """Serializer for Conversation."""
+
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = ('id', 'created_at', 'updated_at', 'messages')
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 
-class BeaconIncidentSerializer(serializers.ModelSerializer):
-    """Serializer for BeaconIncident - automatic beacon detection."""
+class GuardAssignmentSerializer(serializers.ModelSerializer):
+    """Serializer for GuardAssignment."""
 
-    student = serializers.StringRelatedField(read_only=True)
+    guard = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GuardAssignment
+        fields = ('id', 'guard', 'assigned_at', 'is_active')
+        read_only_fields = ('id', 'assigned_at')
+    
+    def get_guard(self, obj):
+        return {
+            'id': str(obj.guard.id),
+            'full_name': obj.guard.full_name,
+            'email': obj.guard.email
+        }
+
+
+class IncidentDetailedSerializer(serializers.ModelSerializer):
+    """Full incident serializer with all related data."""
+
     beacon = BeaconSerializer(read_only=True)
-    beacon_id = serializers.PrimaryKeyRelatedField(
-        queryset=Beacon.objects.all(),
-        source='beacon',
-        write_only=True,
-        required=True
-    )
+    signals = IncidentSignalSerializer(many=True, read_only=True)
+    guard_assignment = serializers.SerializerMethodField()
+    conversation = ConversationSerializer(read_only=True)
+    guard_alerts = serializers.SerializerMethodField()
 
     class Meta:
-        model = BeaconIncident
+        model = Incident
         fields = (
-            'id', 'student', 'beacon', 'beacon_id',
-            'status', 'priority', 'description',
+            'id', 'beacon', 'status', 'priority', 'description',
+            'first_signal_time', 'last_signal_time',
+            'signals', 'guard_assignment', 'guard_alerts', 'conversation',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'student', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'first_signal_time', 'last_signal_time')
+    
+    def get_guard_assignment(self, obj):
+        try:
+            assignment = obj.guard_assignments.get(is_active=True)
+            return GuardAssignmentSerializer(assignment).data
+        except GuardAssignment.DoesNotExist:
+            return None
+    
+    def get_guard_alerts(self, obj):
+        alerts = obj.guard_alerts.all().order_by('priority_rank')
+        return [
+            {
+                'id': alert.id,
+                'guard': {
+                    'id': str(alert.guard.id),
+                    'full_name': alert.guard.full_name
+                },
+                'status': alert.status,
+                'distance_km': alert.distance_km,
+                'priority_rank': alert.priority_rank,
+                'alert_sent_at': alert.alert_sent_at
+            }
+            for alert in alerts
+        ]
 
 
-class PanicButtonIncidentSerializer(serializers.ModelSerializer):
-    """Serializer for PanicButtonIncident - ESP32 panic button alerts."""
+class IncidentListSerializer(serializers.ModelSerializer):
+    """Lightweight incident serializer for list views."""
 
-    esp32_device = serializers.StringRelatedField(read_only=True)
-    student = serializers.StringRelatedField(read_only=True)
-    esp32_device_id = serializers.PrimaryKeyRelatedField(
-        queryset=ESP32Device.objects.all(),
-        source='esp32_device',
-        write_only=True,
-        required=True
-    )
+    beacon = BeaconSerializer(read_only=True)
+    signal_count = serializers.SerializerMethodField()
+    guard_assignment = serializers.SerializerMethodField()
 
     class Meta:
-        model = PanicButtonIncident
+        model = Incident
         fields = (
-            'id', 'esp32_device', 'esp32_device_id', 'student',
-            'status', 'priority', 'description',
-            'created_at', 'updated_at'
+            'id', 'beacon', 'status', 'priority', 'description',
+            'signal_count', 'guard_assignment',
+            'first_signal_time', 'last_signal_time',
+            'created_at'
         )
-        read_only_fields = ('id', 'student', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'first_signal_time', 'last_signal_time')
+    
+    def get_signal_count(self, obj):
+        return obj.signals.count()
+    
+    def get_guard_assignment(self, obj):
+        try:
+            assignment = obj.guard_assignments.get(is_active=True)
+            return {
+                'guard_name': assignment.guard.full_name,
+                'assigned_at': assignment.assigned_at
+            }
+        except GuardAssignment.DoesNotExist:
+            return None
+
+
+class IncidentCreateSerializer(serializers.Serializer):
+    """Serializer for creating incidents via SOS report."""
+
+    beacon_id = serializers.UUIDField(required=True, help_text="Location of incident")
+    description = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+
+    class Meta:
+        fields = ('beacon_id', 'description')

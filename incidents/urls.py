@@ -9,9 +9,7 @@ app_name = 'incidents'
 
 router = DefaultRouter()
 router.register(r'beacons', views.BeaconViewSet, basename='beacon')
-router.register(r'reported-incidents', views.ReportedIncidentViewSet, basename='reported-incident')
-router.register(r'beacon-incidents', views.BeaconIncidentViewSet, basename='beacon-incident')
-router.register(r'panic-incidents', views.PanicButtonIncidentViewSet, basename='panic-incident')
+router.register(r'incidents', views.IncidentViewSet, basename='incident')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -5,33 +5,19 @@ from .models import Conversation, Message
 class ConversationSerializer(serializers.ModelSerializer):
     """Serializer for Conversation model."""
 
-    reported_incident = serializers.StringRelatedField(read_only=True)
-    beacon_incident = serializers.StringRelatedField(read_only=True)
-    panic_incident = serializers.StringRelatedField(read_only=True)
-    reported_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['ReportedIncident']).ReportedIncident.objects.all(),
-        source='reported_incident',
+    incident = serializers.StringRelatedField(read_only=True)
+    incident_id = serializers.PrimaryKeyRelatedField(
+        queryset=__import__('incidents.models', fromlist=['Incident']).Incident.objects.all(),
+        source='incident',
         write_only=True,
-        required=False
-    )
-    beacon_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['BeaconIncident']).BeaconIncident.objects.all(),
-        source='beacon_incident',
-        write_only=True,
-        required=False
-    )
-    panic_incident_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('incidents.models', fromlist=['PanicButtonIncident']).PanicButtonIncident.objects.all(),
-        source='panic_incident',
-        write_only=True,
-        required=False
+        required=True
     )
     message_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Conversation
-        fields = ('reported_incident', 'reported_incident_id', 'beacon_incident', 'beacon_incident_id', 'panic_incident', 'panic_incident_id', 'message_count', 'created_at', 'updated_at')
-        read_only_fields = ('created_at', 'updated_at')
+        fields = ('id', 'incident', 'incident_id', 'message_count', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
     def get_message_count(self, obj):
         return obj.messages.count()

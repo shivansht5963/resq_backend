@@ -18,13 +18,13 @@ class GuardProfileAdmin(admin.ModelAdmin):
 
 @admin.register(GuardAssignment)
 class GuardAssignmentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'guard', 'reported_incident', 'beacon_incident', 'panic_incident', 'is_active', 'assigned_at')
+    list_display = ('id', 'guard', 'incident', 'is_active', 'assigned_at')
     list_filter = ('is_active', 'assigned_at')
-    search_fields = ('guard__email', 'reported_incident__id', 'beacon_incident__id', 'panic_incident__id')
+    search_fields = ('guard__user__email', 'incident__id', 'incident__beacon__uuid')
     ordering = ('-assigned_at',)
     readonly_fields = ('id', 'assigned_at', 'updated_at')
     fieldsets = (
-        ('Assignment', {'fields': ('id', 'guard', 'reported_incident', 'beacon_incident', 'panic_incident')}),
+        ('Assignment', {'fields': ('id', 'guard', 'incident')}),
         ('Status', {'fields': ('is_active',)}),
         ('Timestamps', {'fields': ('assigned_at', 'updated_at')}),
     )

@@ -2,33 +2,20 @@ from django.db import models
 
 
 class AIEvent(models.Model):
-    """AI detection event (Vision or Audio)."""
+    """AI detection event (Vision or Audio). Logs detection, optionally triggers incident."""
 
     class EventType(models.TextChoices):
         VISION = "VISION", "Vision Detection"
         AUDIO = "AUDIO", "Audio Detection"
 
-    # Support all three incident types
-    reported_incident = models.ForeignKey(
-        "incidents.ReportedIncident",
-        on_delete=models.CASCADE,
+    id = models.AutoField(primary_key=True)
+    beacon = models.ForeignKey(
+        "incidents.Beacon",
+        on_delete=models.PROTECT,
         related_name="ai_events",
         null=True,
-        blank=True
-    )
-    beacon_incident = models.ForeignKey(
-        "incidents.BeaconIncident",
-        on_delete=models.CASCADE,
-        related_name="ai_events",
-        null=True,
-        blank=True
-    )
-    panic_incident = models.ForeignKey(
-        "incidents.PanicButtonIncident",
-        on_delete=models.CASCADE,
-        related_name="ai_events",
-        null=True,
-        blank=True
+        blank=True,
+        help_text="Location where AI detected the event"
     )
     event_type = models.CharField(
         max_length=20,
@@ -44,12 +31,11 @@ class AIEvent(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["reported_incident", "-created_at"]),
-            models.Index(fields=["beacon_incident", "-created_at"]),
-            models.Index(fields=["panic_incident", "-created_at"]),
+            models.Index(fields=["beacon", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
+            models.Index(fields=["confidence_score", "-created_at"]),
         ]
 
     def __str__(self):
-        incident_id = self.reported_incident.id or self.beacon_incident.id or self.panic_incident.id
-        return f"AIEvent ({self.get_event_type_display()}) - Incident {str(incident_id)[:8]}"
+        return f"AIEvent ({self.get_event_type_display()}) at {self.beacon.location_name} - conf={self.confidence_score:.2f}"
+

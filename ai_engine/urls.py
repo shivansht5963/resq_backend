@@ -12,4 +12,5 @@ router.register(r'ai-events', views.AIEventViewSet, basename='ai-event')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('ai-detection/', views.ai_detection_endpoint, name='ai-detection'),
 ]
