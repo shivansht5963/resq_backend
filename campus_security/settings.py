@@ -66,7 +66,7 @@ ROOT_URLCONF = 'campus_security.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'campus_security' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

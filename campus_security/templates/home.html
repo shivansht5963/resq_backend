@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResQ - Campus Security & Emergency Response System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: 
+                linear-gradient(0deg, transparent 24%, rgba(200, 180, 255, 0.08) 25%, rgba(200, 180, 255, 0.08) 26%, transparent 27%, transparent 74%, rgba(200, 180, 255, 0.08) 75%, rgba(200, 180, 255, 0.08) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(200, 180, 255, 0.08) 25%, rgba(200, 180, 255, 0.08) 26%, transparent 27%, transparent 74%, rgba(200, 180, 255, 0.08) 75%, rgba(200, 180, 255, 0.08) 76%, transparent 77%, transparent);
+            background-size: 60px 60px;
+            background-color: #f5f3ee;
+            min-height: 100vh;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 4rem;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(168, 85, 247, 0.15);
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .building-tag {
+            font-size: 0.875rem;
+            color: #a855f7;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+        }
+
+        .building-tag::before {
+            content: '';
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 2px solid #a855f7;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .logo {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #1a1a1a;
+            letter-spacing: -1px;
+            margin-left: 1rem;
+        }
+
+        .dev-badge {
+            background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            font-size: 0.95rem;
+        }
+
+        .dev-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 6rem 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .hero-content {
+            text-align: left;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 1.125rem;
+            color: #666;
+            margin-bottom: 3rem;
+            font-weight: 500;
+        }
+
+        .hero p {
+            font-size: 1.125rem;
+            color: #555;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 3rem;
+        }
+
+        .btn {
+            padding: 0.75rem 2rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid;
+            font-size: 0.95rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+            color: white;
+            border-color: #a855f7;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #a855f7;
+            border-color: #a855f7;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(168, 85, 247, 0.1);
+            color: #a855f7;
+        }
+
+        /* Hero Right Card */
+        .hero-card {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+            border: 2px solid rgba(168, 85, 247, 0.25);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.08) 0%, transparent 70%);
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(20px, 20px); }
+        }
+
+        .hero-card-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .hero-card-icon {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            flex-shrink: 0;
+        }
+
+        .hero-card-text h3 {
+            font-size: 1.5rem;
+            color: #1a1a1a;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero-card-text p {
+            font-size: 0.95rem;
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+
+        /* Features Section */
+        .features {
+            padding: 6rem 0;
+        }
+
+        .features-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .features-header h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+            font-weight: 800;
+        }
+
+        .features-header p {
+            font-size: 1.125rem;
+            color: #666;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 1.2rem;
+            padding: 2.5rem;
+            border: 2px solid rgba(168, 85, 247, 0.15);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .feature-card:hover {
+            border-color: #a855f7;
+            box-shadow: 0 16px 32px rgba(168, 85, 247, 0.15);
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 0.375rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            width: fit-content;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            color: #a855f7;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-align: left;
+        }
+
+        .feature-description {
+            color: #555;
+            line-height: 1.6;
+            text-align: left;
+        }
+
+        /* Status Section */
+        .status-section {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+            border-radius: 1.2rem;
+            padding: 3rem;
+            text-align: center;
+            margin-top: 4rem;
+            border: 2px solid rgba(168, 85, 247, 0.25);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+            padding: 0.5rem 1.5rem;
+            border-radius: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            border: 1px solid #a855f7;
+        }
+
+        .status-section h3 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+
+        .status-section p {
+            font-size: 1.125rem;
+            color: #555;
+            margin-bottom: 2rem;
+        }
+
+        /* API Info */
+        .api-info {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 1.2rem;
+            padding: 2rem;
+            margin-top: 3rem;
+            border: 2px solid rgba(168, 85, 247, 0.15);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .api-info h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1a1a1a;
+        }
+
+        .api-endpoint {
+            background: rgba(168, 85, 247, 0.05);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            color: #a855f7;
+            overflow-x: auto;
+            border-left: 3px solid #a855f7;
+        }
+
+        /* Footer */
+        footer {
+            display: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header {
+                padding: 1.5rem 1rem;
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .header-left {
+                flex-direction: column;
+            }
+
+            .logo {
+                font-size: 1.5rem;
+            }
+
+            .hero {
+                padding: 3rem 0;
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .features {
+                padding: 3rem 0;
+            }
+
+            .features-header h2 {
+                font-size: 2rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .status-section {
+                padding: 2rem;
+            }
+
+            .status-section h3 {
+                font-size: 1.5rem;
+            }
+
+            .hero-card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <a href="#" class="building-tag">Building for Codecratz</a>
+            <div class="logo">ResQ</div>
+        </div>
+        <button class="dev-badge">Developing soon</button>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Hero Section -->
+        <section class="hero" style="text-align: center; padding: 0; display: block; width: 100%;">
+            <h1 style="font-size: 5.5rem; margin-bottom: 1.5rem; color: #1a1a1a; font-weight: 800;">Welcome to ResQ</h1>
+            <p style="font-size: 1.8rem; color: #666; margin-bottom: 0.5rem; font-weight: 500;">You're on the Backend</p>
+            <p style="font-size: 1.3rem; color: #a855f7; margin-bottom: 3rem;">Where all the unglamorous magic happens</p>
+            
+            <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%); border: 2px solid rgba(168, 85, 247, 0.25); border-radius: 1.5rem; padding: 3.5rem; max-width: 480px; margin: 0 auto; backdrop-filter: blur(10px);">
+                <div style="font-size: 3.5rem; margin-bottom: 1.5rem;">
+                    <i class="fas fa-code"></i>
+                </div>
+                <h2 style="font-size: 2rem; color: #1a1a1a; margin-bottom: 1rem;">Under Development</h2>
+                <p style="color: #555; font-size: 1.1rem; line-height: 1.6; margin: 0;">
+                    Still cooking, not ready to be served
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p><strong>ResQ Campus Security System</strong></p>
+        <p>Beacon-based indoor positioning for emergency response</p>
+        <p style="margin-top: 1.5rem;">Backend powered by Django REST Framework</p>
+    </footer>
+</body>
+</html>
