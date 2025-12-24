@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,8 @@ SECRET_KEY = 'django-insecure-(^f17f2)(hva#@6k6p7$8k6i6y74aqz6&&6gpb((v574&c0xjc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+# Netlify hosts
+ALLOWED_HOSTS = ['*.netlify.app', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -84,7 +86,7 @@ WSGI_APPLICATION = 'campus_security.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': '/tmp/db.sqlite3' if os.environ.get('NETLIFY') else BASE_DIR / 'db.sqlite3',
     }
 }
 
