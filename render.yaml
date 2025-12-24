@@ -3,9 +3,10 @@ services:
     name: resq-backend
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python manage.py migrate && gunicorn campus_security.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: gunicorn campus_security.wsgi:application --bind 0.0.0.0:$PORT
+    preDeployCommand: python manage.py migrate
     plan: free
-    healthCheckPath: /accounts/
+    healthCheckPath: /api/accounts/
     envVars:
       - key: DEBUG
         value: "True"
