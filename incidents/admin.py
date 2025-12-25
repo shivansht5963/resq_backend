@@ -54,7 +54,6 @@ class IncidentAdmin(admin.ModelAdmin):
         ('Location', {'fields': ('beacon',)}),
         ('Status', {'fields': ('status', 'priority')}),
         ('Description', {'fields': ('description',)}),
-        ('Signals', {'fields': ('signal_count',), 'classes': ('readonly',)}),
         ('Timestamps', {'fields': ('first_signal_time', 'last_signal_time', 'created_at', 'updated_at')}),
     )
     
@@ -100,10 +99,4 @@ class IncidentSignalAdmin(admin.ModelAdmin):
         ('Signal', {'fields': ('signal_type', 'details')}),
         ('Sources', {'fields': ('source_user', 'source_device', 'ai_event')}),
         ('Timestamps', {'fields': ('id', 'created_at', 'updated_at')}),
-    )
-    fieldsets = (
-        ('Alert', {'fields': ('id', 'esp32_device', 'student')}),
-        ('Status', {'fields': ('status', 'priority')}),
-        ('Details', {'fields': ('description',)}),
-        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
     )
