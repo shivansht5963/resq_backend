@@ -145,6 +145,7 @@ class IncidentSignal(models.Model):
     
     class SignalType(models.TextChoices):
         STUDENT_SOS = "STUDENT_SOS", "Student SOS Report"
+        STUDENT_REPORT = "STUDENT_REPORT", "Student General Report"
         AI_VISION = "AI_VISION", "AI Vision Detection"
         AI_AUDIO = "AI_AUDIO", "AI Audio Detection"
         PANIC_BUTTON = "PANIC_BUTTON", "Panic Button (ESP32)"

@@ -11,7 +11,8 @@ from .serializers import (
     BeaconSerializer,
     IncidentDetailedSerializer,
     IncidentListSerializer,
-    IncidentCreateSerializer
+    IncidentCreateSerializer,
+    IncidentReportSerializer
 )
 from .services import (
     get_or_create_incident_with_signals,
@@ -108,6 +109,90 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'status': 'incident_created' if created else 'signal_added_to_existing',
             'incident_id': str(incident.id),
             'signal_id': signal.id,
+            'incident': IncidentDetailedSerializer(incident).data
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def report(self, request):
+        """
+        Student reports non-emergency incident.
+        
+        POST /api/incidents/report/
+        
+        Request:
+        {
+            "beacon_id": "safe:uuid:403:403",  (optional)
+            "type": "Safety Concern",
+            "description": "Detailed description",
+            "location": "Building A, Room 201"  (optional if beacon_id provided)
+        }
+        
+        Response:
+        {
+            "status": "incident_created" or "signal_added_to_existing",
+            "incident_id": "uuid",
+            "signal_id": 123,
+            "incident": {...}
+        }
+        """
+        serializer = IncidentReportSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        if request.user.role != 'STUDENT':
+            return Response(
+                {'error': 'Only students can report incidents'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Validate that either beacon_id or location is provided
+        beacon_id = serializer.validated_data.get('beacon_id', '').strip()
+        location = serializer.validated_data.get('location', '').strip()
+        
+        if not beacon_id and not location:
+            return Response(
+                {'error': 'Either beacon_id or location must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # For location-based reports, create a virtual beacon_id or use location
+            if beacon_id:
+                # Use actual beacon if provided
+                incident, created, signal = get_or_create_incident_with_signals(
+                    beacon_id=beacon_id,
+                    signal_type=IncidentSignal.SignalType.STUDENT_REPORT,
+                    source_user_id=request.user.id,
+                    description=f"[{serializer.validated_data['type']}] {serializer.validated_data['description']}"
+                )
+            else:
+                # For location-only reports, use location as beacon_id
+                # This allows grouping of reports at the same location
+                virtual_beacon_id = f"location:{location.lower().replace(' ', '_')}"
+                incident, created, signal = get_or_create_incident_with_signals(
+                    beacon_id=virtual_beacon_id,
+                    signal_type=IncidentSignal.SignalType.STUDENT_REPORT,
+                    source_user_id=request.user.id,
+                    description=f"[{serializer.validated_data['type']}] {serializer.validated_data['description']}",
+                    details={
+                        'location': location,
+                        'report_type': serializer.validated_data['type']
+                    }
+                )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Only alert guards if incident was newly created
+        if created:
+            alert_guards_for_incident(incident)
+        
+        response_data = {
+            'status': 'incident_created' if created else 'signal_added_to_existing',
+            'incident_id': str(incident.id),
+            'signal_id': signal.id,
+            'report_type': serializer.validated_data['type'],
             'incident': IncidentDetailedSerializer(incident).data
         }
         

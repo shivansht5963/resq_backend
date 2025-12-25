@@ -175,3 +175,15 @@ class IncidentCreateSerializer(serializers.Serializer):
 
     class Meta:
         fields = ('beacon_id', 'description')
+
+
+class IncidentReportSerializer(serializers.Serializer):
+    """Serializer for creating non-emergency incidents via student report."""
+
+    beacon_id = serializers.CharField(required=False, allow_blank=True, max_length=100, help_text="Hardware beacon ID (optional)")
+    type = serializers.CharField(required=True, max_length=100, help_text="Report type (e.g., Safety Concern, Suspicious Activity, Infrastructure Issue)")
+    description = serializers.CharField(required=True, max_length=1000, help_text="Detailed description of the incident")
+    location = serializers.CharField(required=False, allow_blank=True, max_length=255, help_text="Location description if no beacon available")
+
+    class Meta:
+        fields = ('beacon_id', 'type', 'description', 'location')

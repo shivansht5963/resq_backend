@@ -53,10 +53,26 @@ def get_or_create_incident_with_signals(
     """
     
     # 1. Validate beacon (lookup by beacon_id hardware identifier)
-    try:
-        beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
-    except Beacon.DoesNotExist:
-        raise ValueError(f"Invalid or inactive beacon: {beacon_id}")
+    # Allow virtual beacon_ids (location:*) for non-beacon-based reports
+    if beacon_id.startswith('location:'):
+        # Virtual beacon for location-based reports
+        # Create or get virtual beacon placeholder
+        beacon, _ = Beacon.objects.get_or_create(
+            beacon_id=beacon_id,
+            defaults={
+                'uuid': beacon_id,
+                'location_name': beacon_id.replace('location:', '').replace('_', ' ').title(),
+                'building': 'Virtual Location',
+                'floor': 0,
+                'is_active': True
+            }
+        )
+    else:
+        # Real hardware beacon
+        try:
+            beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
+        except Beacon.DoesNotExist:
+            raise ValueError(f"Invalid or inactive beacon: {beacon_id}")
     
     # 2. Try to find existing active incident within dedup window
     dedup_cutoff = timezone.now() - timedelta(minutes=DEDUP_WINDOW_MINUTES)

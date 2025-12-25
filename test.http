@@ -89,7 +89,7 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "550e8400-e29b-41d4-a716-446655440000",
+  "beacon_id": "550e8400-e29b-41d4-a716-446655441111",
   "description": "I need help in the library main hall"
 }
 
@@ -111,6 +111,41 @@ Authorization: Token {{studentToken}}
 {
   "beacon_id": "safe:uuid:401:401",
   "description": "Emergency at test location"
+}
+
+### 2.1d Report Non-Emergency Incident (With Beacon)
+POST {{baseUrl}}/incidents/report/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "550e8400-e29b-41d4-a716-446655441111",
+  "type": "Safety Concern",
+  "description": "Broken glass observed near the library entrance. Potential hazard for students.",
+  "location": "Library 3F Entrance"
+}
+
+### 2.1e Report Non-Emergency Incident (Location-Based, No Beacon)
+POST {{baseUrl}}/incidents/report/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "type": "Suspicious Activity",
+  "description": "Unfamiliar person loitering near the dormitory building without access badge.",
+  "location": "Dormitory Building A, Ground Floor"
+}
+
+### 2.1f Report Non-Emergency Incident (Infrastructure Issue)
+POST {{baseUrl}}/incidents/report/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "safe:uuid:402:402",
+  "type": "Infrastructure Issue",
+  "description": "Lighting malfunction in the hallway. Several light fixtures are non-functional.",
+  "location": "Hallway 4F"
 }
 
 ### 2.2 Get Incident Details (with status, guard assignment, messages)
