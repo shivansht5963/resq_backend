@@ -148,6 +148,93 @@ Authorization: Token {{studentToken}}
   "location": "Hallway 4F"
 }
 
+### 2.1g Report Incident with Images (multipart/form-data)
+### NOTE: Replace image path with actual file path on your system
+POST {{baseUrl}}/incidents/report/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Token {{studentToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="beacon_id"
+
+safe:uuid:403:403
+------WebKitFormBoundary
+Content-Disposition: form-data; name="type"
+
+Safety Concern
+------WebKitFormBoundary
+Content-Disposition: form-data; name="description"
+
+Broken glass observed near the library entrance. Sharp fragments on floor pose hazard.
+------WebKitFormBoundary
+Content-Disposition: form-data; name="location"
+
+Library 3F, Main Entrance
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="incident_photo_1.jpg"
+Content-Type: image/jpeg
+
+[Image data would go here - use REST client's file upload feature]
+------WebKitFormBoundary--
+
+### 2.1h Report Location-Based Incident (No Beacon)
+POST {{baseUrl}}/incidents/report/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Token {{studentToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="type"
+
+Suspicious Activity
+------WebKitFormBoundary
+Content-Disposition: form-data; name="description"
+
+Unknown person loitering near dormitory without access badge.
+------WebKitFormBoundary
+Content-Disposition: form-data; name="location"
+
+Dormitory Building A, Ground Floor, Entrance
+------WebKitFormBoundary--
+
+### 2.1i Test Image Validation (Too Many Images)
+POST {{baseUrl}}/incidents/report/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Authorization: Token {{studentToken}}
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="beacon_id"
+
+safe:uuid:403:403
+------WebKitFormBoundary
+Content-Disposition: form-data; name="type"
+
+Test Report
+------WebKitFormBoundary
+Content-Disposition: form-data; name="description"
+
+This request has 4 images (should fail with max 3 error)
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="image1.jpg"
+Content-Type: image/jpeg
+
+[Image 1 data]
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="image2.jpg"
+Content-Type: image/jpeg
+
+[Image 2 data]
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="image3.jpg"
+Content-Type: image/jpeg
+
+[Image 3 data]
+------WebKitFormBoundary
+Content-Disposition: form-data; name="images"; filename="image4.jpg"
+Content-Type: image/jpeg
+
+[Image 4 data - should fail]
+------WebKitFormBoundary--
+
 ### 2.2 Get Incident Details (with status, guard assignment, messages)
 GET {{baseUrl}}/incidents/{{incidentId}}/
 Authorization: Token {{studentToken}}

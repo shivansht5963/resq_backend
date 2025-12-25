@@ -140,6 +140,44 @@ class Incident(models.Model):
         return f"Incident {str(self.id)[:8]} at {self.beacon.location_name} - {self.get_status_display()}"
 
 
+class IncidentImage(models.Model):
+    """Images attached to an incident report (max 3 per incident)."""
+    
+    id = models.AutoField(primary_key=True)
+    incident = models.ForeignKey(
+        Incident,
+        on_delete=models.CASCADE,
+        related_name="images",
+        help_text="Incident this image belongs to"
+    )
+    image = models.ImageField(
+        upload_to='incidents/%Y/%m/%d/',
+        help_text="Incident photo/screenshot"
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incident_images",
+        help_text="User who uploaded image"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Image caption (optional)"
+    )
+    
+    class Meta:
+        ordering = ['uploaded_at']
+        verbose_name = "Incident Image"
+        verbose_name_plural = "Incident Images"
+    
+    def __str__(self):
+        return f"Image for {self.incident.id} uploaded by {self.uploaded_by.email}"
+
+
 class IncidentSignal(models.Model):
     """Source signal that triggered an incident."""
     

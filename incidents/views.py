@@ -6,13 +6,14 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
-from .models import Beacon, Incident, IncidentSignal, ESP32Device
+from .models import Beacon, Incident, IncidentSignal, ESP32Device, IncidentImage
 from .serializers import (
     BeaconSerializer,
     IncidentDetailedSerializer,
     IncidentListSerializer,
     IncidentCreateSerializer,
-    IncidentReportSerializer
+    IncidentReportSerializer,
+    IncidentImageSerializer
 )
 from .services import (
     get_or_create_incident_with_signals,
@@ -117,23 +118,32 @@ class IncidentViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def report(self, request):
         """
-        Student reports non-emergency incident.
+        Student reports non-emergency incident with optional images.
         
-        POST /api/incidents/report/
+        POST /api/incidents/report/ (multipart/form-data)
         
-        Request:
+        Form Data:
+        - beacon_id: string (optional, e.g., "safe:uuid:403:403")
+        - type: string (required, e.g., "Safety Concern")
+        - description: string (required)
+        - location: string (optional, required if no beacon_id)
+        - images: file[] (optional, max 3 images)
+        
+        Response: 201/200 OK
         {
-            "beacon_id": "safe:uuid:403:403",  (optional)
-            "type": "Safety Concern",
-            "description": "Detailed description",
-            "location": "Building A, Room 201"  (optional if beacon_id provided)
-        }
-        
-        Response:
-        {
-            "status": "incident_created" or "signal_added_to_existing",
+            "status": "incident_created",
             "incident_id": "uuid",
             "signal_id": 123,
+            "report_type": "Safety Concern",
+            "images": [
+                {
+                    "id": 1,
+                    "image": "https://...",
+                    "uploaded_by_email": "student@example.com",
+                    "uploaded_at": "2025-12-26T...",
+                    "description": ""
+                }
+            ],
             "incident": {...}
         }
         """
@@ -154,6 +164,14 @@ class IncidentViewSet(viewsets.ModelViewSet):
         if not beacon_id and not location:
             return Response(
                 {'error': 'Either beacon_id or location must be provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate image count (max 3)
+        images = request.FILES.getlist('images', [])
+        if len(images) > 3:
+            return Response(
+                {'error': 'Maximum 3 images allowed per report'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -184,6 +202,17 @@ class IncidentViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Store images (max 3)
+        image_objects = []
+        for idx, image_file in enumerate(images[:3]):
+            incident_image = IncidentImage.objects.create(
+                incident=incident,
+                image=image_file,
+                uploaded_by=request.user,
+                description=f"Image {idx + 1}" if not image_file.name else image_file.name
+            )
+            image_objects.append(incident_image)
+        
         # Only alert guards if incident was newly created
         if created:
             alert_guards_for_incident(incident)
@@ -193,6 +222,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'incident_id': str(incident.id),
             'signal_id': signal.id,
             'report_type': serializer.validated_data['type'],
+            'images': IncidentImageSerializer(image_objects, many=True).data,
             'incident': IncidentDetailedSerializer(incident).data
         }
         

@@ -1,7 +1,18 @@
 from rest_framework import serializers
-from .models import Beacon, Incident, IncidentSignal, ESP32Device
+from .models import Beacon, Incident, IncidentSignal, ESP32Device, IncidentImage
 from security.models import GuardAssignment, GuardAlert
 from chat.models import Conversation, Message
+
+
+class IncidentImageSerializer(serializers.ModelSerializer):
+    """Serializer for incident images."""
+    
+    uploaded_by_email = serializers.CharField(source='uploaded_by.email', read_only=True)
+    
+    class Meta:
+        model = IncidentImage
+        fields = ('id', 'image', 'uploaded_by_email', 'uploaded_at', 'description')
+        read_only_fields = ('id', 'uploaded_at', 'uploaded_by_email')
 
 
 class BeaconSerializer(serializers.ModelSerializer):
@@ -97,6 +108,7 @@ class IncidentDetailedSerializer(serializers.ModelSerializer):
 
     beacon = BeaconSerializer(read_only=True)
     signals = IncidentSignalSerializer(many=True, read_only=True)
+    images = IncidentImageSerializer(many=True, read_only=True)
     guard_assignment = serializers.SerializerMethodField()
     conversation = ConversationSerializer(read_only=True)
     guard_alerts = serializers.SerializerMethodField()
@@ -106,7 +118,7 @@ class IncidentDetailedSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'beacon', 'status', 'priority', 'description',
             'first_signal_time', 'last_signal_time',
-            'signals', 'guard_assignment', 'guard_alerts', 'conversation',
+            'signals', 'images', 'guard_assignment', 'guard_alerts', 'conversation',
             'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'first_signal_time', 'last_signal_time')
