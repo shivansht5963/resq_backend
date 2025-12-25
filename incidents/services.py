@@ -37,7 +37,7 @@ def get_or_create_incident_with_signals(
     Atomic operation: get existing active incident or create new.
     
     Args:
-        beacon_id: UUID of beacon location
+        beacon_id: Hardware beacon ID (e.g., "safe:uuid:403:403")
         signal_type: IncidentSignal.SignalType choice (STUDENT_SOS, AI_VISION, AI_AUDIO, PANIC_BUTTON)
         source_user_id: User who triggered signal (for STUDENT_SOS)
         source_device_id: ESP32Device that triggered signal (for PANIC_BUTTON)
@@ -52,9 +52,9 @@ def get_or_create_incident_with_signals(
         ValueError: if beacon is invalid or inactive
     """
     
-    # 1. Validate beacon
+    # 1. Validate beacon (lookup by beacon_id hardware identifier)
     try:
-        beacon = Beacon.objects.get(id=beacon_id, is_active=True)
+        beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
     except Beacon.DoesNotExist:
         raise ValueError(f"Invalid or inactive beacon: {beacon_id}")
     

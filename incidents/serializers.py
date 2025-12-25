@@ -170,7 +170,7 @@ class IncidentListSerializer(serializers.ModelSerializer):
 class IncidentCreateSerializer(serializers.Serializer):
     """Serializer for creating incidents via SOS report."""
 
-    beacon_id = serializers.UUIDField(required=True, help_text="Location of incident")
+    beacon_id = serializers.CharField(required=True, max_length=100, help_text="Hardware beacon ID (e.g., safe:uuid:403:403)")
     description = serializers.CharField(required=False, allow_blank=True, max_length=1000)
 
     class Meta:

@@ -18,7 +18,7 @@
 ### 0. DIAGNOSTICS - RUN THESE FIRST
 ###############################################
 
-### 0.0 GET ALL BEACONS (RUN THIS FIRST - See what backend actually has!)
+### 0.0 GET ALL BEACONS (RUN THIS FIRST - Copy the "id" values!)
 GET {{baseUrl}}/beacons/
 Authorization: Token {{studentToken}}
 
@@ -29,7 +29,7 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "uuid-403",
+  "beacon_id": "3e3f5319-b90a-4077-86b5-f81ce8e5b0a7",
   "description": "Test incident"
 }
 
@@ -99,7 +99,7 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "550e8400-e29b-41d4-a716-446655441100",
+  "beacon_id": "test:uuid:2:2",
   "description": "Emergency in hallway"
 }
 
@@ -109,7 +109,7 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "550e8400-e29b-41d4-a716-446655441111",
+  "beacon_id": "safe:uuid:401:401",
   "description": "Emergency at test location"
 }
 
