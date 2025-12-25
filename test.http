@@ -2,7 +2,7 @@
 ### Install: REST Client extension for VS Code
 ### Usage: Click "Send Request" above each request or Ctrl+Alt+R
 
-@baseUrl = http://localhost:8000/api
+@baseUrl = https://resq-server.onrender.com/api
 @studentToken = 0ae475f9cf39e1134b4003d17a2b1b9f47b1e386
 @guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
 @adminToken = your_admin_token_here
@@ -18,9 +18,20 @@
 ### 0. DIAGNOSTICS - RUN THESE FIRST
 ###############################################
 
-### 0.0 GET ALL BEACONS (RUN THIS FIRST!)
+### 0.0 GET ALL BEACONS (RUN THIS FIRST - See what backend actually has!)
 GET {{baseUrl}}/beacons/
 Authorization: Token {{studentToken}}
+
+### 0.0b DIAGNOSTIC - Test with dashboard beacon UUID (Library 3F)
+### Replace 'uuid-403' with actual value from GET /beacons/ response
+POST {{baseUrl}}/incidents/report_sos/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "uuid-403",
+  "description": "Test incident"
+}
 
 ### 0.1 Check Available Endpoints (Browse in browser)
 ### http://localhost:8000/api/
@@ -78,19 +89,29 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "c5727009-a9eb-4ec2-9825-86e58d535997",
+  "beacon_id": "550e8400-e29b-41d4-a716-446655440000",
   "description": "I need help in the library main hall"
 }
 
-# ### 2.1b Report SOS Emergency (Test Lab)
-# POST {{baseUrl}}/incidents/report-sos/
-# Content-Type: application/json
-# Authorization: Token {{studentToken}}
+### 2.1b Report SOS Emergency (Hallway 4F)
+POST {{baseUrl}}/incidents/report_sos/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
 
-# {
-#   "beacon_id": "529e317a-5c76-468b-a764-3daf050e19dd",
-#   "description": "Emergency in test lab"
-# }
+{
+  "beacon_id": "550e8400-e29b-41d4-a716-446655441100",
+  "description": "Emergency in hallway"
+}
+
+### 2.1c Report SOS Emergency (Test Lab)
+POST {{baseUrl}}/incidents/report_sos/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "550e8400-e29b-41d4-a716-446655441111",
+  "description": "Emergency at test location"
+}
 
 ### 2.2 Get Incident Details (with status, guard assignment, messages)
 GET {{baseUrl}}/incidents/{{incidentId}}/
@@ -338,10 +359,19 @@ Authorization: Token {{guardToken}}
 ### password: admin123
 ### role: ADMIN
 
-### Sample Beacon IDs
-### 550e8400-e29b-41d4-a716-446655440000  (Library Entrance)
-### 660e8400-e29b-41d4-a716-446655440001  (Building A Entrance)
-### 770e8400-e29b-41d4-a716-446655440002  (Science Center)
+### Sample Beacon IDs (From API - VERIFIED WORKING ONLY)
+### DO NOT USE beacons with beacon_id: null - they will fail validation!
+### 
+### WORKING Beacon IDs (pass backend validation):
+### "safe:uuid:403:403"              (Library 3F - VERIFIED ACTIVE ✓)
+### "test:uuid:2:2"                  (Hallway 4F - VERIFIED ACTIVE ✓)
+### "safe:uuid:402:402"              (Hallway 4F duplicate - VERIFIED ACTIVE ✓)
+### "safe:uuid:401:401"              (Library 4F - VERIFIED ACTIVE ✓)
+###
+### NOT WORKING / UNRELIABLE:
+### "550e8400-e29b-41d4-a716-446655441111" (shivansh home - returns 400 ✗)
+### "550e8400-e29b-41d4-a716-446655441100" (shivansh x test - NULL beacon_id ✗)
+### "550e8400-e29b-41d4-a716-446655440000" (Test Lab - NULL beacon_id ✗)
 
 ###############################################
 ### WORKFLOW EXAMPLE
