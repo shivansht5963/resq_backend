@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.utils import timezone
 from .models import GuardProfile, GuardAssignment, DeviceToken, GuardAlert
-from .serializers import GuardProfileSerializer, GuardAssignmentSerializer, DeviceTokenSerializer, GuardAlertSerializer, GuardAlertDetailSerializer
+from .serializers import GuardProfileSerializer, GuardAssignmentSerializer, DeviceTokenSerializer, GuardAlertSerializer, GuardAlertDetailSerializer, GuardLocationUpdateSerializer
 from .utils import get_top_n_nearest_guards
 from accounts.permissions import IsGuard, IsAdmin
 
@@ -19,15 +19,68 @@ class GuardProfileViewSet(viewsets.ReadOnlyModelViewSet):
     GET /api/guards/ - List all guards
     GET /api/guards/{id}/ - Get guard details
     
-    POST /api/guards/{id}/set_beacon/ - Assign guard to a beacon location
+    POST /api/guards/{id}/set_beacon/ - Assign guard to a beacon location (DEPRECATED)
+    POST /api/guards/update_location/ - Update guard's current beacon (new)
     """
     queryset = GuardProfile.objects.all()
     serializer_class = GuardProfileSerializer
     permission_classes = [IsAuthenticated]
     
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_location(self, request):
+        """
+        Update guard's current beacon location.
+        
+        Called periodically by mobile app (every 10-15 seconds).
+        Idempotent & lightweight - updates GuardProfile.current_beacon and last_beacon_update.
+        
+        Endpoint: POST /api/guards/update_location/
+        
+        Request:
+        {
+            "nearest_beacon_id": "550e8400-e29b-41d4-a716-446655440000",
+            "timestamp": "2025-12-25T10:30:00Z"  // optional
+        }
+        
+        Response:
+        {
+            "status": "location_updated",
+            "guard": {...},
+            "current_beacon": {...}
+        }
+        """
+        serializer = GuardLocationUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get guard's profile
+        try:
+            guard_profile = request.user.guard_profile
+        except GuardProfile.DoesNotExist:
+            return Response(
+                {'error': 'User does not have a guard profile'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update beacon and timestamp
+        beacon = serializer.validated_data['nearest_beacon_id']
+        guard_profile.current_beacon = beacon
+        guard_profile.last_beacon_update = timezone.now()
+        guard_profile.last_active_at = timezone.now()
+        guard_profile.save(update_fields=['current_beacon', 'last_beacon_update', 'last_active_at'])
+        
+        return Response({
+            'status': 'location_updated',
+            'guard': GuardProfileSerializer(guard_profile).data
+        }, status=status.HTTP_200_OK)
+    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def set_beacon(self, request, pk=None):
-        """Assign guard to a beacon location (beacon-based positioning)."""
+        """
+        DEPRECATED: Use /api/guards/update_location/ instead.
+        
+        Assign guard to a beacon location (beacon-based positioning).
+        """
         from incidents.models import Beacon
         
         guard_profile = self.get_object()
@@ -144,10 +197,7 @@ class GuardAlertViewSet(viewsets.ModelViewSet):
         
         # Guards see only alerts sent to them
         if user.role == 'GUARD':
-            try:
-                return GuardAlert.objects.filter(guard=user.guard_profile)
-            except GuardProfile.DoesNotExist:
-                return GuardAlert.objects.none()
+            return GuardAlert.objects.filter(guard=user)
         
         # Admins see all alerts
         return GuardAlert.objects.all()

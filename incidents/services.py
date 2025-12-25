@@ -170,70 +170,26 @@ def get_initial_priority(signal_type):
 
 def alert_guards_for_incident(incident, max_guards=3):
     """
-    Send alerts to nearest guards.
+    Send alerts to nearest guards (via beacon-proximity search).
     
     CRITICAL: Only sends alerts if incident has NO active GuardAssignment.
     This prevents re-alerting when new signals arrive on existing incident.
     
+    Uses beacon-proximity logic to find available guards:
+    1. Search incident beacon
+    2. Expand to nearby beacons (priority order)
+    3. Continue until max_guards found or all beacons exhausted
+    
     Args:
         incident: Incident model instance
         max_guards: Max number of guards to alert (default 3)
+    
+    Returns:
+        list: GuardAlert instances created
     """
+    from security.services import alert_guards_via_beacon_proximity
     
-    # 1. Check if incident already has active assignment
-    active_assignment = GuardAssignment.objects.filter(
-        incident=incident,
-        is_active=True
-    ).exists()
-    
-    if active_assignment:
-        logger.info(
-            f"[ALERT] Incident {incident.id} already has active assignment. Skipping guard alerts.",
-            extra={'incident_id': str(incident.id)}
-        )
-        return
-    
-    # 2. Find nearest guards
-    nearest_guards = find_top_n_nearest_guards(
-        beacon=incident.beacon,
-        n=max_guards,
-        exclude_current_beacon=True
-    )
-    
-    # 3. Create alerts
-    for rank, (guard_user, distance_km) in enumerate(nearest_guards, 1):
-        # Check if guard already has pending alert for this incident
-        existing_alert = GuardAlert.objects.filter(
-            incident=incident,
-            guard=guard_user,
-            status__in=[GuardAlert.AlertStatus.SENT, GuardAlert.AlertStatus.ACKNOWLEDGED]
-        ).exists()
-        
-        if existing_alert:
-            logger.info(
-                f"[ALERT] Guard {guard_user.full_name} already has alert for incident {incident.id}. Skipping.",
-                extra={'incident_id': str(incident.id), 'guard_id': str(guard_user.id)}
-            )
-            continue
-        
-        # Create alert
-        alert = GuardAlert.objects.create(
-            incident=incident,
-            guard=guard_user,
-            status=GuardAlert.AlertStatus.SENT,
-            distance_km=distance_km,
-            priority_rank=rank
-        )
-        
-        logger.info(
-            f"[ALERT] Sent alert to guard {guard_user.full_name} for incident {incident.id} (rank #{rank})",
-            extra={
-                'incident_id': str(incident.id),
-                'guard_id': str(guard_user.id),
-                'distance_km': distance_km,
-                'alert_id': alert.id
-            }
-        )
+    return alert_guards_via_beacon_proximity(incident, max_guards)
 
 
 def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, available_only=True):
@@ -272,91 +228,26 @@ def handle_guard_alert_acknowledged(alert):
     """
     Guard acknowledged the alert. Create assignment and update incident status.
     
+    Now uses beacon-proximity logic.
+    
     Args:
         alert: GuardAlert instance
     """
+    from security.services import handle_guard_alert_acknowledged_via_proximity
     
-    with transaction.atomic():
-        # 1. Update alert status
-        alert.status = GuardAlert.AlertStatus.ACKNOWLEDGED
-        alert.save(update_fields=['status', 'updated_at'])
-        
-        # 2. Create or update assignment
-        assignment, created = GuardAssignment.objects.update_or_create(
-            incident=alert.incident,
-            defaults={'guard': alert.guard, 'is_active': True}
-        )
-        
-        # 3. Link alert to assignment
-        alert.assignment = assignment
-        alert.save(update_fields=['assignment'])
-        
-        # 4. Update incident status
-        incident = alert.incident
-        if incident.status == Incident.Status.CREATED:
-            incident.status = Incident.Status.ASSIGNED
-            incident.save(update_fields=['status'])
-        
-        logger.info(
-            f"[ASSIGNMENT] Guard {alert.guard.full_name} assigned to incident {incident.id}",
-            extra={'incident_id': str(incident.id), 'guard_id': str(alert.guard.id)}
-        )
+    return handle_guard_alert_acknowledged_via_proximity(alert)
 
 
 def handle_guard_alert_declined(alert):
     """
-    Guard declined alert. Try next guard.
+    Guard declined alert. Try next guard via beacon-proximity search.
+    
+    Now uses beacon-proximity logic - continues expanding radius.
+    Does NOT restart from beginning.
     
     Args:
         alert: GuardAlert instance
     """
+    from security.services import handle_guard_alert_declined_via_proximity
     
-    with transaction.atomic():
-        # 1. Update alert status
-        alert.status = GuardAlert.AlertStatus.DECLINED
-        alert.save(update_fields=['status', 'updated_at'])
-        
-        logger.info(
-            f"[DECLINED] Guard {alert.guard.full_name} declined incident {alert.incident.id}",
-            extra={'incident_id': str(alert.incident.id), 'guard_id': str(alert.guard.id)}
-        )
-        
-        # 2. Find next guard
-        alerted_guard_ids = GuardAlert.objects.filter(
-            incident=alert.incident
-        ).values_list('guard_id', flat=True)
-        
-        next_guards = find_top_n_nearest_guards(
-            beacon=alert.incident.beacon,
-            n=1,
-            available_only=True
-        )
-        
-        if next_guards:
-            next_guard_user, next_distance = next_guards[0]
-            
-            # Check if already alerted
-            existing_alert = GuardAlert.objects.filter(
-                incident=alert.incident,
-                guard=next_guard_user
-            ).exists()
-            
-            if not existing_alert:
-                new_alert = GuardAlert.objects.create(
-                    incident=alert.incident,
-                    guard=next_guard_user,
-                    status=GuardAlert.AlertStatus.SENT,
-                    distance_km=next_distance,
-                    priority_rank=alert.priority_rank + 1 if alert.priority_rank else 2
-                )
-                
-                logger.info(
-                    f"[NEXT_GUARD] Alerted next guard {next_guard_user.full_name}",
-                    extra={'incident_id': str(alert.incident.id)}
-                )
-        else:
-            # All guards exhausted
-            logger.warning(
-                f"[NO_GUARDS] All guards exhausted for incident {alert.incident.id}",
-                extra={'incident_id': str(alert.incident.id)}
-            )
+    return handle_guard_alert_declined_via_proximity(alert)

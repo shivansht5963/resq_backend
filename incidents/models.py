@@ -19,6 +19,15 @@ class Beacon(models.Model):
     latitude = models.FloatField(null=True, blank=True, help_text="Fixed beacon latitude")
     longitude = models.FloatField(null=True, blank=True, help_text="Fixed beacon longitude")
     
+    # Beacon proximity (for expanding-radius guard search)
+    nearby_beacons = models.ManyToManyField(
+        'self',
+        through='BeaconProximity',
+        symmetrical=False,
+        related_name='nearby_from',
+        help_text="Nearby beacons in priority order for guard search expansion"
+    )
+    
     is_active = models.BooleanField(default=True, db_index=True, help_text="Is beacon operational")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -37,6 +46,44 @@ class Beacon(models.Model):
 
     def __str__(self):
         return f"{self.location_name} ({self.building}, Floor {self.floor})"
+
+
+class BeaconProximity(models.Model):
+    """
+    Defines proximity relationship between beacons with priority order.
+    Used for expanding-radius guard search when no guards found at incident beacon.
+    """
+    
+    from_beacon = models.ForeignKey(
+        Beacon,
+        on_delete=models.CASCADE,
+        related_name='proximity_from'
+    )
+    to_beacon = models.ForeignKey(
+        Beacon,
+        on_delete=models.CASCADE,
+        related_name='proximity_to'
+    )
+    priority = models.IntegerField(
+        default=1,
+        db_index=True,
+        help_text="Lower number = higher priority (1 = nearest/same floor, 2 = adjacent floor, 3+ = far zones)"
+    )
+    
+    class Meta:
+        ordering = ['priority']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['from_beacon', 'to_beacon'],
+                name='unique_beacon_pair'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['from_beacon', 'priority']),
+        ]
+    
+    def __str__(self):
+        return f"{self.from_beacon.location_name} → {self.to_beacon.location_name} (Priority {self.priority})"
 
 
 class Incident(models.Model):

@@ -1,5 +1,14 @@
 from django.contrib import admin
-from .models import Beacon, ESP32Device, Incident, IncidentSignal
+from .models import Beacon, BeaconProximity, ESP32Device, Incident, IncidentSignal
+
+
+class BeaconProximityInline(admin.TabularInline):
+    """Inline admin for managing nearby beacons from a beacon."""
+    model = BeaconProximity
+    fk_name = 'from_beacon'
+    extra = 1
+    fields = ('to_beacon', 'priority')
+    ordering = ('priority',)
 
 
 @admin.register(Beacon)
@@ -9,6 +18,7 @@ class BeaconAdmin(admin.ModelAdmin):
     search_fields = ('location_name', 'uuid', 'building')
     ordering = ('building', 'floor')
     readonly_fields = ('id', 'created_at', 'updated_at')
+    inlines = [BeaconProximityInline]
     fieldsets = (
         ('Location Info', {'fields': ('location_name', 'building', 'floor')}),
         ('Beacon Identifiers', {'fields': ('uuid', 'major', 'minor', 'beacon_id')}),
@@ -51,6 +61,31 @@ class IncidentAdmin(admin.ModelAdmin):
     def signal_count(self, obj):
         return obj.signals.count()
     signal_count.short_description = 'Signal Count'
+
+
+@admin.register(BeaconProximity)
+class BeaconProximityAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing beacon proximity relationships.
+    Used for expanding-radius guard search in incident assignment.
+    """
+    list_display = ('from_beacon', 'to_beacon', 'priority')
+    list_filter = ('priority', 'from_beacon__building')
+    search_fields = ('from_beacon__location_name', 'to_beacon__location_name')
+    ordering = ('from_beacon', 'priority')
+    readonly_fields = ('id',)
+    fieldsets = (
+        ('Beacon Relationship', {'fields': ('from_beacon', 'to_beacon')}),
+        ('Priority', {
+            'fields': ('priority',),
+            'description': 'Lower = higher priority. 1=same floor, 2=adjacent floor, 3+=far zones'
+        }),
+    )
+    
+    def get_search_results(self, request, queryset, search_term):
+        """Enhanced search to find by either beacon."""
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        return queryset, use_distinct
 
 
 @admin.register(IncidentSignal)

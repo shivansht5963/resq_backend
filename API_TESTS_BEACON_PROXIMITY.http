@@ -1,0 +1,225 @@
+### BEACON PROXIMITY GUARD ASSIGNMENT - API TESTS
+### Test file for manual API verification using REST Client extension
+
+# Variables
+@baseUrl = http://localhost:8000/api
+@token = your_auth_token_here
+
+###
+### 1. GUARD LOCATION UPDATE ENDPOINT TEST
+### POST /api/guards/update_location/
+###
+
+@guardBeaconId = 550e8400-e29b-41d4-a716-446655440000
+
+POST {{baseUrl}}/guards/update_location/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nearest_beacon_id": "{{guardBeaconId}}",
+  "timestamp": "2025-12-25T10:30:00Z"
+}
+
+###
+### Expected Response (200 OK):
+### {
+###   "status": "location_updated",
+###   "guard": {
+###     "id": 123,
+###     "user": "Guard Name",
+###     "is_active": true,
+###     "is_available": true,
+###     "current_beacon": {
+###       "id": "...",
+###       "beacon_id": "...",
+###       "location_name": "Library 4F",
+###       "building": "Main",
+###       "floor": 4,
+###       "latitude": 40.7128,
+###       "longitude": -74.0060
+###     },
+###     "last_beacon_update": "2025-12-25T10:30:00Z",
+###     "last_active_at": "2025-12-25T10:30:00Z"
+###   }
+### }
+
+###
+### 2. GET GUARD PROFILE (verify location was updated)
+###
+
+GET {{baseUrl}}/guards/1/
+Authorization: Bearer {{token}}
+
+###
+
+###
+### 3. CREATE INCIDENT (triggers guard alert)
+###
+
+POST {{baseUrl}}/incidents/report_sos/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "beacon_id": "{{guardBeaconId}}",
+  "description": "Emergency SOS from student at Library 4F"
+}
+
+###
+### Response will include:
+### {
+###   "status": "incident_created",
+###   "incident_id": "uuid",
+###   "signal_id": 1,
+###   "incident": {...}
+### }
+
+###
+### 4. LIST GUARD ALERTS (guard sees incoming alerts)
+###
+
+GET {{baseUrl}}/alerts/?status=SENT
+Authorization: Bearer {{token}}
+
+###
+
+###
+### 5. GUARD ACKNOWLEDGES ALERT (creates assignment)
+###
+
+@alertId = 1
+
+POST {{baseUrl}}/alerts/{{alertId}}/acknowledge/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+###
+### Expected Response:
+### {
+###   "id": 1,
+###   "incident": {...},
+###   "guard": {
+###     "id": 1,
+###     "name": "Guard 1",
+###     "email": "guard1@test.com"
+###   },
+###   "distance_km": 0.0,
+###   "status": "ACKNOWLEDGED",
+###   "priority_rank": 1,
+###   "alert_sent_at": "...",
+###   "updated_at": "..."
+### }
+
+###
+### 6. VERIFY INCIDENT STATUS CHANGED TO ASSIGNED
+###
+
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Bearer {{token}}
+
+###
+
+###
+### 7. STUDENT & GUARD CHAT IN CONVERSATION
+###
+
+GET {{baseUrl}}/conversations/
+Authorization: Bearer {{token}}
+
+###
+
+###
+### 8. SEND MESSAGE IN CONVERSATION
+###
+
+@conversationId = 1
+
+POST {{baseUrl}}/conversations/{{conversationId}}/send_message/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "content": "I need help at Library 4F"
+}
+
+###
+
+###
+### 9. GET ALL MESSAGES IN CONVERSATION
+###
+
+GET {{baseUrl}}/conversations/{{conversationId}}/messages/
+Authorization: Bearer {{token}}
+
+###
+
+###
+### 10. GUARD DECLINES ALERT (if testing decline flow)
+###
+
+@alertId2 = 2
+
+POST {{baseUrl}}/alerts/{{alertId2}}/decline/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+###
+### Expected: Next available guard gets alerted automatically
+
+###
+### 11. RESOLVE INCIDENT (deactivate assignment)
+###
+
+PATCH {{baseUrl}}/incidents/{{incidentId}}/resolve/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+###
+### Expected: 
+### - Incident status: ASSIGNED → RESOLVED
+### - GuardAssignment.is_active: True → False
+
+###
+### TEST NOTES:
+###
+### 1. Replace {{token}} with actual auth token:
+###    POST /api/auth/login/ or /api-token-auth/
+###
+### 2. Replace {{guardBeaconId}} with actual beacon UUID from database:
+###    SELECT id FROM incidents_beacon LIMIT 1;
+###
+### 3. Replace {{incidentId}} and {{conversationId}} with values from responses
+###
+### 4. Test sequence:
+###    - Guard updates location (every 10-15 sec)
+###    - Student creates SOS incident
+###    - Alerts sent to nearby guards (expanding radius)
+###    - Guard acknowledges → Assignment created
+###    - Guard & student chat
+###    - Incident resolved → Assignment deactivated
+###
+### 5. Edge cases to test:
+###    - No guards available → Incident CREATED but not ASSIGNED
+###    - Guard decline → Next guard in priority order alerted
+###    - Multiple signals on same incident → No duplicate alerts
+###    - Guard already assigned to another incident → Skipped in search
+###
+
+### BEACON PROXIMITY SETUP (Admin Task)
+### Django shell:
+###   from incidents.models import Beacon, BeaconProximity
+###   b4f = Beacon.objects.get(location_name="Library 4F")
+###   b3f = Beacon.objects.get(location_name="Library 3F")
+###   b5f = Beacon.objects.get(location_name="Library 5F")
+###   
+###   # Add proximity relationships
+###   BeaconProximity.objects.create(from_beacon=b4f, to_beacon=b3f, priority=1)
+###   BeaconProximity.objects.create(from_beacon=b4f, to_beacon=b5f, priority=1)
+###   BeaconProximity.objects.create(from_beacon=b4f, to_beacon=b_entrance, priority=2)

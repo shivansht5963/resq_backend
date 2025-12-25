@@ -113,3 +113,26 @@ class GuardAlertDetailSerializer(serializers.ModelSerializer):
             'name': obj.guard.full_name,
             'email': obj.guard.email
         }
+
+
+class GuardLocationUpdateSerializer(serializers.Serializer):
+    """Serializer for guard location update endpoint."""
+    
+    nearest_beacon_id = serializers.UUIDField(
+        required=True,
+        help_text="UUID of the nearest beacon (from mobile detection)"
+    )
+    timestamp = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        help_text="Client-side timestamp (optional, server uses current time)"
+    )
+    
+    def validate_nearest_beacon_id(self, value):
+        """Validate that beacon exists and is active."""
+        from incidents.models import Beacon
+        try:
+            beacon = Beacon.objects.get(id=value, is_active=True)
+            return beacon
+        except Beacon.DoesNotExist:
+            raise serializers.ValidationError(f"Beacon {value} not found or inactive")

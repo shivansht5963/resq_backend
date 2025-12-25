@@ -1,0 +1,453 @@
+### REST CLIENT TESTING FILE FOR CAMPUS SECURITY BACKEND
+### Install: REST Client extension for VS Code
+### Usage: Click "Send Request" above each request or Ctrl+Alt+R
+
+@baseUrl = http://localhost:8000/api
+@studentToken = 0ae475f9cf39e1134b4003d17a2b1b9f47b1e386
+@guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
+@adminToken = your_admin_token_here
+
+@studentId = 1
+@guardId = 3
+@incidentId = 75ca3932-0b7c-475b-834b-0573dfe037dc
+@alertId = 17
+@conversationId = 1
+@beaconId = beacon-uuid-here
+
+###############################################
+### 0. DIAGNOSTICS - RUN THESE FIRST
+###############################################
+
+### 0.0 GET ALL BEACONS (RUN THIS FIRST!)
+GET {{baseUrl}}/beacons/
+Authorization: Token {{studentToken}}
+
+### 0.1 Check Available Endpoints (Browse in browser)
+### http://localhost:8000/api/
+
+### 0.2 Check Incidents Endpoint
+### http://localhost:8000/api/incidents/
+
+### 0.3 Check OPTIONS (available methods)
+OPTIONS {{baseUrl}}/incidents/
+Authorization: Token {{studentToken}}
+
+###############################################
+### 1. AUTHENTICATION ENDPOINTS
+###############################################
+
+### 1.1 Login as Student
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "test_student@example.com",
+  "password": "GoogleAC12%"
+}
+
+### 1.2 Login as Guard
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "gtest3@test.com",
+  "password": "GoogleAC12%"
+}
+
+### 1.3 Login as Admin
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+### 1.4 Logout (Replace token with actual token)
+POST {{baseUrl}}/auth/logout/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+###############################################
+### 2. STUDENT ENDPOINTS
+###############################################
+
+### 2.1 Report SOS Emergency (Library 3F)
+POST {{baseUrl}}/incidents/report_sos/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "c5727009-a9eb-4ec2-9825-86e58d535997",
+  "description": "I need help in the library main hall"
+}
+
+# ### 2.1b Report SOS Emergency (Test Lab)
+# POST {{baseUrl}}/incidents/report-sos/
+# Content-Type: application/json
+# Authorization: Token {{studentToken}}
+
+# {
+#   "beacon_id": "529e317a-5c76-468b-a764-3daf050e19dd",
+#   "description": "Emergency in test lab"
+# }
+
+### 2.2 Get Incident Details (with status, guard assignment, messages)
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{studentToken}}
+
+### 2.3 List All Student's Incidents
+GET {{baseUrl}}/incidents/
+Authorization: Token {{studentToken}}
+
+### 2.4 Get Conversation Messages
+GET {{baseUrl}}/conversations/{{conversationId}}/messages/
+Authorization: Token {{studentToken}}
+
+### 2.5 Send Message to Guard
+POST {{baseUrl}}/conversations/{{conversationId}}/send_message/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "content": "I'm in the main reading area on the first floor"
+}
+
+### 2.6 Resolve Incident (Only student/admin)
+POST {{baseUrl}}/incidents/{{incidentId}}/resolve/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+###############################################
+### 3. GUARD ENDPOINTS
+###############################################
+
+### 3.0 CRITICAL: First GET ALERTS TO SEE WHAT EXISTS
+### Run this BEFORE trying alert detail/acknowledge/decline
+GET {{baseUrl}}/alerts/
+Authorization: Token {{guardToken}}
+
+### Copy the "id" from response above and update @alertId at top
+
+### 3.1 Update Guard Location (Critical - Every 10-15 sec)
+POST {{baseUrl}}/guards/update_location/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "nearest_beacon_id": "529e317a-5c76-468b-a764-3daf050e19dd",
+  "timestamp": "2025-12-25T10:30:15Z"
+}
+
+### 3.2 Poll for Alerts (Every 5-10 sec) - RUN THIS FIRST!
+GET {{baseUrl}}/alerts/
+Authorization: Token {{guardToken}}
+
+### 3.3 Get Alert Details (REPLACE 16 with actual alert id from 3.2)
+GET {{baseUrl}}/alerts/{{alertId}}/
+Authorization: Token {{guardToken}}
+
+### 3.4 Accept Alert (Acknowledge) - (REPLACE 16 with actual id)
+POST {{baseUrl}}/alerts/{{alertId}}/acknowledge/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+### 3.5 Decline Alert (Reject) - (REPLACE 16 with actual id)
+POST {{baseUrl}}/alerts/{{alertId}}/decline/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+### 3.6 Get Guard Profile
+GET {{baseUrl}}/guards/{{guardId}}/
+Authorization: Token {{guardToken}}
+
+### 3.7 List All Guards (Admin view)
+GET {{baseUrl}}/guards/
+Authorization: Token {{adminToken}}
+
+### 3.8 Get Guard Assignments
+GET {{baseUrl}}/assignments/
+Authorization: Token {{guardToken}}
+
+### 3.9 Send Message to Student (from Guard)
+POST {{baseUrl}}/conversations/{{conversationId}}/send_message/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "content": "I'm arriving in 2 minutes. I'm near the main entrance."
+}
+
+###############################################
+### 4. CHAT ENDPOINTS
+###############################################
+
+### 4.1 List All Conversations
+GET {{baseUrl}}/conversations/
+Authorization: Token {{studentToken}}
+
+### 4.2 Get Conversation Details with Messages
+GET {{baseUrl}}/conversations/{{conversationId}}/
+Authorization: Token {{studentToken}}
+
+### 4.3 Get All Messages in Conversation
+GET {{baseUrl}}/conversations/{{conversationId}}/messages/
+Authorization: Token {{studentToken}}
+
+### 4.4 Send Message
+POST {{baseUrl}}/conversations/{{conversationId}}/send_message/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "content": "Thank you for helping me!"
+}
+
+### 4.5 List All Messages (Admin)
+GET {{baseUrl}}/messages/
+Authorization: Token {{adminToken}}
+
+###############################################
+### 5. INCIDENT ENDPOINTS
+###############################################
+
+### 5.1 List All Incidents (Filtered by Role)
+GET {{baseUrl}}/incidents/
+Authorization: Token {{studentToken}}
+
+### 5.2 List Incidents as Guard
+GET {{baseUrl}}/incidents/
+Authorization: Token {{guardToken}}
+
+### 5.3 List Incidents as Admin (All)
+GET {{baseUrl}}/incidents/
+Authorization: Token {{adminToken}}
+
+### 5.4 Get Full Incident Details + Signals + Chat
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{studentToken}}
+
+### 5.5 Update Incident (Admin)
+PATCH {{baseUrl}}/incidents/{{incidentId}}/
+Content-Type: application/json
+Authorization: Token {{adminToken}}
+
+{
+  "status": "IN_PROGRESS",
+  "priority": 3
+}
+
+### 5.6 Mark Incident as Resolved
+POST {{baseUrl}}/incidents/{{incidentId}}/resolve/
+Authorization: Token {{studentToken}}
+
+### 5.7 Get All Signals for Incident
+GET {{baseUrl}}/incidents/{{incidentId}}/signals/
+Authorization: Token {{studentToken}}
+
+### 5.8 Panic Button (No Auth Required)
+POST {{baseUrl}}/panic/
+Content-Type: application/json
+
+{
+  "device_id": "ESP32-001"
+}
+
+###############################################
+### 6. BEACON ENDPOINTS
+###############################################
+
+### 6.1 List All Beacons
+GET {{baseUrl}}/beacons/
+Authorization: Token {{studentToken}}
+
+### 6.2 Get Specific Beacon Details (Test Lab)
+GET {{baseUrl}}/beacons/529e317a-5c76-468b-a764-3daf050e19dd/
+Authorization: Token {{studentToken}}
+
+###############################################
+### 7. ASSIGNMENT ENDPOINTS
+###############################################
+
+### 7.1 List Assignments (Guard sees own only)
+GET {{baseUrl}}/assignments/
+Authorization: Token {{guardToken}}
+
+### 7.2 List All Assignments (Admin)
+GET {{baseUrl}}/assignments/
+Authorization: Token {{adminToken}}
+
+### 7.3 Get Assignment Details
+GET {{baseUrl}}/assignments/1/
+Authorization: Token {{guardToken}}
+
+### 7.4 Deactivate Assignment
+POST {{baseUrl}}/assignments/1/deactivate/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+### 7.5 Create Assignment Manually (Admin)
+POST {{baseUrl}}/assignments/
+Content-Type: application/json
+Authorization: Token {{adminToken}}
+
+{
+  "incident": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "guard": "guard-uuid-here",
+  "is_active": true
+}
+
+###############################################
+### 8. DEVICE TOKEN ENDPOINTS (FCM)
+###############################################
+
+### 8.1 Register Device Token
+POST {{baseUrl}}/device-tokens/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "token": "exampleFCMtoken123456789",
+  "platform": "ANDROID"
+}
+
+### 8.2 List Device Tokens
+GET {{baseUrl}}/device-tokens/
+Authorization: Token {{guardToken}}
+
+### 8.3 Delete Device Token (Logout from device)
+DELETE {{baseUrl}}/device-tokens/1/
+Authorization: Token {{guardToken}}
+
+###############################################
+### TEST DATA REFERENCE
+###############################################
+
+### Student Test User
+### email: student@example.com
+### password: password123
+### role: STUDENT
+
+### Guard Test User
+### email: guard@example.com
+### password: password123
+### role: GUARD
+
+### Admin Test User
+### email: admin@example.com
+### password: admin123
+### role: ADMIN
+
+### Sample Beacon IDs
+### 550e8400-e29b-41d4-a716-446655440000  (Library Entrance)
+### 660e8400-e29b-41d4-a716-446655440001  (Building A Entrance)
+### 770e8400-e29b-41d4-a716-446655440002  (Science Center)
+
+###############################################
+### WORKFLOW EXAMPLE
+###############################################
+
+### STEP 1: Login as Student
+### POST /api/auth/login/ → Get student token
+
+### STEP 2: Get Beacons
+### GET /api/beacons/ → Find nearest beacon
+
+### STEP 3: Report SOS
+### POST /api/incidents/report-sos/ → Get incident_id
+
+### STEP 4: Poll Incident Status (repeat 5-10s)
+### GET /api/incidents/{incident_id}/ → Check for guard assignment
+
+### STEP 5: Once Assigned, Get Conversation
+### GET /api/conversations/{conversation_id}/ → See messages
+
+### STEP 6: Send Message
+### POST /api/conversations/{conversation_id}/send_message/ → Chat with guard
+
+### STEP 7: Resolve Incident
+### POST /api/incidents/{incident_id}/resolve/ → Mark complete
+
+
+### GUARD WORKFLOW
+
+### STEP 1: Login as Guard
+### POST /api/auth/login/ → Get guard token
+
+### STEP 2: Start Location Updates (every 10-15s)
+### POST /api/guards/update_location/ → Update beacon
+
+### STEP 3: Poll for Alerts (every 5-10s)
+### GET /api/alerts/ → Check for new incidents
+
+### STEP 4: Accept Alert
+### POST /api/alerts/{alert_id}/acknowledge/ → Get assignment + conversation
+
+### STEP 5: Send Message to Student
+### POST /api/conversations/{conversation_id}/send_message/ → Chat
+
+### STEP 6: Resolve Incident
+### POST /api/incidents/{incident_id}/resolve/ → Mark complete
+
+###############################################
+### TOKEN SETUP INSTRUCTIONS
+###############################################
+
+### 1. First, login with each role to get tokens:
+###    POST /api/auth/login/ with student@example.com
+###    POST /api/auth/login/ with guard@example.com
+###    POST /api/auth/login/ with admin@example.com
+
+### 2. Copy the auth_token from each response
+
+### 3. Replace @studentToken, @guardToken, @adminToken at top of file
+
+### 4. Now all requests will include proper authorization
+
+### Example Response from Login:
+### {
+###   "auth_token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+###   "user_id": "550e8400-e29b-41d4-a716-446655440000",
+###   "role": "STUDENT"
+### }
+
+###############################################
+### EXPECTED RESPONSE CODES
+###############################################
+
+### 200 OK           → Request successful
+### 201 CREATED      → Resource created (SOS, message, etc)
+### 400 BAD REQUEST  → Invalid input (check JSON)
+### 401 UNAUTHORIZED → Token missing/invalid (check token)
+### 403 FORBIDDEN    → User not allowed (check role)
+### 404 NOT FOUND    → Resource doesn't exist
+### 500 SERVER ERROR → Backend issue
+
+###############################################
+### TROUBLESHOOTING
+###############################################
+
+### 401 Error?
+### - Check token is valid (not expired)
+### - Copy exact token string with no extra spaces
+### - Use "Authorization: Token <token>" format
+
+### 404 Not Found?
+### - Check UUID is valid
+### - Check incident/alert/conversation exists
+
+### 400 Bad Request?
+### - Check JSON format is valid
+### - Check required fields are present
+### - Check beacon_id is valid UUID
+
+### 403 Forbidden?
+### - Check user role is correct
+### - Check user has permission for action
+### - Guards can't report SOS, students can't accept alerts
+
+### Tips
+### - Use POST method for actions (report, accept, send)
+### - Use GET method for queries (list, get details)
+### - Always include Authorization header for protected endpoints
+### - Always include Content-Type: application/json for request bodies

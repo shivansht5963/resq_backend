@@ -1,0 +1,392 @@
+## BEACON PROXIMITY - VISUAL ARCHITECTURE OVERVIEW
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    CAMPUS SECURITY - GUARD ASSIGNMENT SYSTEM                │
+│                           BEACON PROXIMITY EXPANSION                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                              MOBILE APP (Guard)
+                                    │
+                                    │ POST every 10-15s
+                                    ↓
+                    ┌───────────────────────────────┐
+                    │ /api/guards/update_location/  │
+                    │  nearest_beacon_id: UUID      │
+                    └───────────────────┬───────────┘
+                                        │
+                                        ↓
+                    ┌───────────────────────────────┐
+                    │   GuardProfile.current_beacon │
+                    │   last_beacon_update (NOW)    │
+                    │   last_active_at (NOW)        │
+                    └───────────────────┬───────────┘
+                                        │
+┌──────────────────────────────────────┴──────────────────────────────────────┐
+│                            STUDENT SOS INCIDENT                              │
+└────────────────────────────┬─────────────────────────────────────────────────┘
+                             │
+                             ↓ POST /api/incidents/report_sos/
+                    ┌────────────────────┐
+                    │ Incident.beacon=   │
+                    │  (Library 4F)      │
+                    │ status=CREATED     │
+                    └────────┬───────────┘
+                             │
+                             ↓ Check: active_assignment exists?
+                        ┌────────────┐
+                        │     NO     │ (Continue)
+                        └────┬───────┘
+                             │
+          ┌──────────────────┴──────────────────┐
+          │ find_available_guards_via_beacon    │
+          │ _proximity()                        │
+          └──────────────────┬──────────────────┘
+                             │
+        ┌────────────────────┴────────────────────┐
+        │  EXPANDING-RADIUS BFS SEARCH           │
+        │                                         │
+        │  Priority Level 0: Incident Beacon     │
+        │  ├─ Library 4F                         │
+        │  ├─ ✓ Guard 1 (is_active, available)  │
+        │  │                                     │
+        │  Priority Level 1: BeaconProximity.P1 │
+        │  ├─ Hallway 4F, Stairwell 4F          │
+        │  ├─ ✓ Guard 2                         │
+        │  │                                     │
+        │  Priority Level 2: BeaconProximity.P2 │
+        │  ├─ Library 3F, Library 5F             │
+        │  └─ ✓ Guard 3                         │
+        │                                         │
+        └────────────────────┬────────────────────┘
+                             │
+                    ┌────────↓─────────┐
+                    │ [Guard 1, 2, 3]  │
+                    │ max_guards=3     │
+                    └────────┬─────────┘
+                             │
+          ┌──────────────────┴──────────────────┐
+          │ alert_guards_via_beacon_proximity() │
+          └──────────────────┬──────────────────┘
+                             │
+     ┌───────────────────────┼───────────────────────┐
+     │                       │                       │
+     ↓                       ↓                       ↓
+  GuardAlert             GuardAlert             GuardAlert
+  Guard 1                Guard 2                Guard 3
+  status=SENT            status=SENT            status=SENT
+  rank=1                 rank=2                 rank=3
+     │                       │                       │
+     │                   PUSH NOTIFICATION (FCM)     │
+     ├─→ Ack/Decline ←────────┼────────→ Ack/Decline
+     │                       │                       │
+     ↓                       │                       │
+  ┌──────────────────────┐   │                       │
+  │ handle_guard_alert_  │   │                       │
+  │ acknowledged_via_    │   │                       │
+  │ proximity()          │   │                       │
+  │                      │   │                       │
+  │ 1. Alert→ACKNOWLEDGED   │                       │
+  │ 2. GuardAssignment ←────┤                       │
+  │    created              │                       │
+  │ 3. Incident→ASSIGNED    │                       │
+  │ 4. Expire other alerts  │                       │
+  └──────────┬───────────────┤                       │
+             │               │                       │
+             │               ↓                       │
+             │            ┌──────────────────────┐  │
+             │            │ Alert→DECLINED       │  │
+             │            │ Find next guard      │  │
+             │            │ from priority queue  │  │
+             │            │ Create new alert     │  │
+             │            └──────────┬───────────┘  │
+             │                       │              │
+             ↓                       ↓              ↓
+         ┌────────────────────────────────────┐
+         │    GuardAssignment Created         │
+         │    one_active_per_incident         │ (UNIQUE CONSTRAINT)
+         │    ─────────────────────────────   │
+         │    Incident → Guard 1              │
+         │    is_active = TRUE                │
+         └────────────┬───────────────────────┘
+                      │
+        ┌─────────────┴──────────────┐
+        │  Incident Status Changed   │
+        │  CREATED → ASSIGNED        │
+        └─────────────┬──────────────┘
+                      │
+        ┌─────────────┴──────────────┐
+        │  Create Conversation       │
+        │  (auto-created per        │
+        │   incident)                │
+        └─────────────┬──────────────┘
+                      │
+     ┌────────────────┴────────────────┐
+     │                                 │
+     ↓                                 ↓
+  STUDENT                          GUARD
+  (In Conversation)               (In Conversation)
+     │                                 │
+     │ POST /api/conversations/        │
+     │       {id}/send_message/        │
+     │                                 │
+     │◄────────────────────────────────┤
+     │                                 │
+     │ "I need help at Library 4F"     │
+     │                                 │
+     │────────────────────────────────►│
+     │                                 │
+     │ "On my way, ETA 2 minutes"      │
+     │                                 │
+     ↓                                 ↓
+
+         ┌────────────────────────────┐
+         │ INCIDENT RESOLVED          │
+         │ PATCH /api/incidents/      │
+         │       {id}/resolve/        │
+         ├────────────────────────────┤
+         │ Status: ASSIGNED → RESOLVED│
+         │ GuardAssignment.is_active  │
+         │    = FALSE                 │
+         └────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATABASE RELATIONSHIPS                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                           ┌──────────────┐
+                           │   Beacon     │
+                           ├──────────────┤
+                           │ id (UUID)    │
+                           │ location_name│
+                           │ building     │
+                           │ floor        │
+                           │ uuid, major  │
+                           │ minor        │
+                           │ is_active    │
+                           └───────┬──────┘
+                                   │
+                     ┌─────────────┴─────────────┐
+                     │ nearby_beacons (M2M)      │
+                     │ (through BeaconProximity) │
+                     └─────────────┬─────────────┘
+                                   │
+                           ┌───────↓──────────┐
+                           │BeaconProximity   │
+                           ├──────────────────┤
+                           │from_beacon (FK)  │
+                           │to_beacon (FK)    │
+                           │priority (int)    │
+                           └─────────┬────────┘
+                                     │
+    ┌────────────────────────────────┤
+    │                                │
+    │                        ┌───────↓────────────┐
+    │                        │   Incident         │
+    │                        ├────────────────────┤
+    │                        │ id (UUID)          │
+    │                        │ beacon (FK) ───────┘
+    │                        │ status             │
+    │                        │ priority           │
+    │                        │ created_at         │
+    │                        └────────┬───────────┘
+    │                                 │
+    │     ┌──────────────────────────┬┴──────────────────┐
+    │     │                          │                  │
+    │     ↓                          ↓                  ↓
+    │  ┌──────────────────┐   ┌────────────────┐  ┌──────────────┐
+    │  │  GuardAlert      │   │GuardAssignment │  │Conversation  │
+    │  ├──────────────────┤   ├────────────────┤  ├──────────────┤
+    │  │incident (FK)     │   │incident (FK)   │  │incident (FK) │
+    │  │guard (FK) ───┐   │   │guard (FK) ─┐   │  │created_at    │
+    │  │status        │   │   │is_active   │   │  └──────┬───────┘
+    │  │priority_rank │   │   │assigned_at │   │         │
+    │  │alert_sent_at │   │   └────────────┘   │         │
+    │  └──────────────────┘                      │         │
+    │         │                                  │         │
+    │         │ UNIQUE(incident, guard)         │         │
+    │         │ Constraint                      │         │
+    │         │                                  │         │
+    │         └──────────────────┬───────────────┘         │
+    │                            │                        │
+    │                    ┌───────┴─────────┐              │
+    │                    │                 │              │
+    │                    ↓                 ↓              ↓
+    │                 ┌──────────────────────────┐  ┌────────────┐
+    │                 │   Message                │  │  (linked   │
+    │                 ├──────────────────────────┤  │   to       │
+    │                 │conversation (FK) ────────┼──┤ incident)  │
+    │                 │sender (FK to User)       │  │            │
+    │                 │message_text              │  └────────────┘
+    │                 │created_at                │
+    │                 └──────────────────────────┘
+    │
+    └────────────────── User (Guard) ──────────────┐
+                                                   │
+                           ┌───────────────────────┤
+                           │                       │
+                    ┌──────↓────────────┐          │
+                    │  GuardProfile     │          │
+                    ├───────────────────┤          │
+                    │user (FK) ─────────┼──────────┘
+                    │current_beacon (FK)│ ───┐
+                    │is_available       │    │
+                    │is_active          │    │
+                    │last_beacon_update │    │
+                    │last_active_at     │    │
+                    └───────────────────┘    │
+                                             │
+                                          (Beacon)
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       DATABASE CONSTRAINTS                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+GuardAssignment
+├─ UNIQUE(incident, is_active=True)
+│  → Only ONE active guard per incident
+│  → Enforced at database level
+│
+GuardAlert
+├─ UNIQUE(incident, guard)
+│  → Same guard won't receive 2 alerts for same incident
+│  → Prevents duplicate alert spam
+│
+BeaconProximity
+├─ UNIQUE(from_beacon, to_beacon)
+│  → No duplicate proximity relationships
+│
+Beacon
+├─ UNIQUE(major, minor)
+│  → iBeacon identifiers must be unique
+├─ UNIQUE(beacon_id)
+│  → Hardware IDs must be unique
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SEARCH ALGORITHM VISUALIZATION                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Scenario: Incident at Library 4F
+All guards: [G1@4F, G2@4F_Hall, G3@3F, G4@5F, G5@Entrance]
+
+Queue: [(Library 4F, P0)]
+Visited: {}
+
+Step 1: Search Library 4F (P0)
+├─ Check G1, G2 at Library 4F
+│  ├─ G1: ✓ active, available, no assignment → ADD
+│  └─ G2: ✗ already assigned elsewhere → SKIP
+├─ Get nearby beacons from BeaconProximity:
+│  ├─ Hallway 4F (P1)
+│  ├─ Stairwell 4F (P1)
+│  └─ Library 3F (P2)
+└─ Queue: [(Hallway 4F, P1), (Stairwell 4F, P1), (Library 3F, P2)]
+
+Step 2: Search Hallway 4F (P1)
+├─ Check G2 at Hallway 4F
+│  └─ G2: ✓ available (not at incident beacon) → ADD
+├─ Get nearby beacons: [...]
+└─ Queue: [(Stairwell 4F, P1), (Library 3F, P2), ...]
+
+Step 3: Search Stairwell 4F (P1)
+├─ Check guards: None at Stairwell
+├─ Get nearby beacons: [...]
+└─ Queue: [(Library 3F, P2), ...]
+
+Step 4: Search Library 3F (P2)
+├─ Check G3 at Library 3F
+│  └─ G3: ✓ available → ADD
+├─ Found 3 guards: [G1, G2, G3]
+└─ STOP (max_guards=3 reached)
+
+Result: [G1 (P0), G2 (P1), G3 (P2)]
+Alerts: 3 sent in priority order
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          API ENDPOINTS SUMMARY                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+GUARD LOCATION UPDATES
+├─ Endpoint: POST /api/guards/update_location/
+├─ Frequency: Every 10-15 seconds
+├─ Idempotent: Yes
+├─ Payload: { nearest_beacon_id, timestamp }
+└─ Response: { status, guard, current_beacon }
+
+ALERT MANAGEMENT
+├─ Acknowledge: POST /api/alerts/{id}/acknowledge/
+│  └─ Effect: Creates GuardAssignment, expires others
+├─ Decline: POST /api/alerts/{id}/decline/
+│  └─ Effect: Finds next guard, continues search
+└─ List: GET /api/alerts/?status=SENT
+
+INCIDENT MANAGEMENT
+├─ Create: POST /api/incidents/report_sos/
+│  └─ Payload: { beacon_id, description }
+├─ Resolve: PATCH /api/incidents/{id}/resolve/
+│  └─ Effect: Deactivates assignment
+└─ List: GET /api/incidents/?status=CREATED
+
+CONVERSATION (Chat)
+├─ List: GET /api/conversations/
+├─ Messages: GET /api/conversations/{id}/messages/
+└─ Send: POST /api/conversations/{id}/send_message/
+   └─ Payload: { content }
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           ADMIN DASHBOARD                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+/admin/
+├─ Incidents
+│  ├─ Beacons (with proximity inline editor)
+│  ├─ Beacon Proximities
+│  └─ Incidents
+├─ Security
+│  ├─ Guard Profiles (with location tracking)
+│  ├─ Guard Alerts (with status monitoring)
+│  ├─ Guard Assignments (one-per-incident)
+│  └─ Device Tokens
+└─ Chat
+   ├─ Conversations
+   └─ Messages
+
+
+COMPLETE SYSTEM FLOW:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│  Guard (Mobile)                                                             │
+│    ↓ update_location (every 10-15s)                                         │
+│  GuardProfile.current_beacon ←→ Beacon                                      │
+│                                   ↓                                         │
+│  Student (Mobile)              Incident                                     │
+│    ↓ report_sos                   ↓                                         │
+│  Incident created ──→ Check for active_assignment ──→ NO ✓                 │
+│                                   ↓                                         │
+│                    find_available_guards_via_beacon                        │
+│                      _proximity()                                          │
+│                      (expanding-radius search)                            │
+│                                   ↓                                         │
+│                    Create GuardAlerts (up to 3)                            │
+│                    Push Notifications (FCM)                                │
+│                                   ↓                                         │
+│                    Guard 1 ──Acknowledge──→ GuardAssignment                │
+│                                            Incident → ASSIGNED             │
+│                                            Conversation created            │
+│                                   ↓                                         │
+│  Student ←────── Chat ────→ Guard 1                                        │
+│  Student: "I need help"                                                    │
+│  Guard: "On my way"                                                        │
+│                                   ↓                                         │
+│                    Incident Resolved                                       │
+│                    Deactivate GuardAssignment                              │
+│                    Status: ASSIGNED → RESOLVED                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✅ SYSTEM READY FOR DEPLOYMENT
