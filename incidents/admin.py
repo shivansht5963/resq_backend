@@ -45,15 +45,15 @@ class ESP32DeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'beacon', 'status', 'priority', 'signal_count', 'first_signal_time')
-    list_filter = ('status', 'priority', 'created_at', 'beacon__building')
-    search_fields = ('id', 'beacon__location_name', 'description')
+    list_display = ('id', 'beacon', 'status', 'priority', 'report_type', 'location', 'signal_count', 'first_signal_time')
+    list_filter = ('status', 'priority', 'report_type', 'created_at', 'beacon__building')
+    search_fields = ('id', 'beacon__location_name', 'description', 'location', 'report_type')
     ordering = ('-created_at',)
     readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at')
     fieldsets = (
-        ('Location', {'fields': ('beacon',)}),
+        ('Location', {'fields': ('beacon', 'location')}),
+        ('Report Info', {'fields': ('report_type', 'description')}),
         ('Status', {'fields': ('status', 'priority')}),
-        ('Description', {'fields': ('description',)}),
         ('Timestamps', {'fields': ('first_signal_time', 'last_signal_time', 'created_at', 'updated_at')}),
     )
     

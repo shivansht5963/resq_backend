@@ -120,6 +120,16 @@ class Incident(models.Model):
         db_index=True
     )
     description = models.TextField(blank=True, help_text="Optional incident description")
+    report_type = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Type of report (e.g., Safety Concern, Suspicious Activity, Infrastructure Issue)"
+    )
+    location = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Location description if different from beacon"
+    )
     first_signal_time = models.DateTimeField(null=True, blank=True, db_index=True)
     last_signal_time = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

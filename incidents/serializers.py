@@ -116,7 +116,7 @@ class IncidentDetailedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Incident
         fields = (
-            'id', 'beacon', 'status', 'priority', 'description',
+            'id', 'beacon', 'status', 'priority', 'description', 'report_type', 'location',
             'first_signal_time', 'last_signal_time',
             'signals', 'images', 'guard_assignment', 'guard_alerts', 'conversation',
             'created_at', 'updated_at'
@@ -158,7 +158,7 @@ class IncidentListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Incident
         fields = (
-            'id', 'beacon', 'status', 'priority', 'description',
+            'id', 'beacon', 'status', 'priority', 'description', 'report_type', 'location',
             'signal_count', 'guard_assignment',
             'first_signal_time', 'last_signal_time',
             'created_at'
