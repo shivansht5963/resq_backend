@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Beacon, BeaconProximity, ESP32Device, Incident, IncidentSignal
+from .models import Beacon, BeaconProximity, ESP32Device, Incident, IncidentSignal, IncidentImage
 
 
 class BeaconProximityInline(admin.TabularInline):
@@ -9,6 +9,22 @@ class BeaconProximityInline(admin.TabularInline):
     extra = 1
     fields = ('to_beacon', 'priority')
     ordering = ('priority',)
+
+
+class IncidentImageInline(admin.TabularInline):
+    """Inline admin for displaying images attached to an incident."""
+    model = IncidentImage
+    extra = 0
+    fields = ('image', 'uploaded_by', 'uploaded_at', 'description')
+    readonly_fields = ('uploaded_by', 'uploaded_at')
+
+
+class IncidentSignalInline(admin.TabularInline):
+    """Inline admin for displaying signals related to an incident."""
+    model = IncidentSignal
+    extra = 0
+    fields = ('signal_type', 'source_user', 'source_device', 'ai_event', 'created_at')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(Beacon)
@@ -45,11 +61,12 @@ class ESP32DeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'beacon', 'status', 'priority', 'report_type', 'location', 'signal_count', 'first_signal_time')
+    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'report_type', 'location', 'signal_count', 'image_count', 'first_signal_time')
     list_filter = ('status', 'priority', 'report_type', 'created_at', 'beacon__building')
-    search_fields = ('id', 'beacon__location_name', 'description', 'location', 'report_type')
+    search_fields = ('id', 'beacon__location_name', 'beacon__beacon_id', 'description', 'location', 'report_type')
     ordering = ('-created_at',)
     readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at')
+    inlines = [IncidentSignalInline, IncidentImageInline]
     fieldsets = (
         ('Location', {'fields': ('beacon', 'location')}),
         ('Report Info', {'fields': ('report_type', 'description')}),
@@ -57,9 +74,21 @@ class IncidentAdmin(admin.ModelAdmin):
         ('Timestamps', {'fields': ('first_signal_time', 'last_signal_time', 'created_at', 'updated_at')}),
     )
     
+    def beacon_id(self, obj):
+        return obj.beacon.beacon_id if obj.beacon else "N/A"
+    beacon_id.short_description = 'Beacon ID'
+    
+    def beacon_location(self, obj):
+        return obj.beacon.location_name if obj.beacon else "N/A"
+    beacon_location.short_description = 'Beacon Location'
+    
     def signal_count(self, obj):
         return obj.signals.count()
-    signal_count.short_description = 'Signal Count'
+    signal_count.short_description = 'Signals'
+    
+    def image_count(self, obj):
+        return obj.images.count()
+    image_count.short_description = 'Images'
 
 
 @admin.register(BeaconProximity)
@@ -100,3 +129,24 @@ class IncidentSignalAdmin(admin.ModelAdmin):
         ('Sources', {'fields': ('source_user', 'source_device', 'ai_event')}),
         ('Timestamps', {'fields': ('id', 'created_at', 'updated_at')}),
     )
+
+
+@admin.register(IncidentImage)
+class IncidentImageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'incident', 'uploaded_by', 'uploaded_at', 'image_preview')
+    list_filter = ('uploaded_at', 'incident__beacon__building')
+    search_fields = ('incident__id', 'uploaded_by__full_name', 'description')
+    ordering = ('-uploaded_at',)
+    readonly_fields = ('id', 'uploaded_at', 'uploaded_by', 'image_preview')
+    fieldsets = (
+        ('Image Info', {'fields': ('incident', 'image', 'image_preview')}),
+        ('Metadata', {'fields': ('uploaded_by', 'description')}),
+        ('Timestamps', {'fields': ('id', 'uploaded_at')}),
+    )
+    
+    def image_preview(self, obj):
+        if obj.image:
+            return f'<img src="{obj.image.url}" width="200" height="150" />'
+        return "No image"
+    image_preview.allow_tags = True
+    image_preview.short_description = 'Preview'

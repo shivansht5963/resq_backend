@@ -185,11 +185,6 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     source_user_id=request.user.id,
                     description=serializer.validated_data['description']
                 )
-                # Set the report type and location fields
-                incident.report_type = serializer.validated_data['type']
-                if location:
-                    incident.location = location
-                incident.save()
             else:
                 # For location-only reports, use location as beacon_id
                 # This allows grouping of reports at the same location
@@ -198,16 +193,13 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     beacon_id=virtual_beacon_id,
                     signal_type=IncidentSignal.SignalType.STUDENT_REPORT,
                     source_user_id=request.user.id,
-                    description=serializer.validated_data['description'],
-                    details={
-                        'location': location,
-                        'report_type': serializer.validated_data['type']
-                    }
+                    description=serializer.validated_data['description']
                 )
-                # Set the report type and location fields
-                incident.report_type = serializer.validated_data['type']
-                incident.location = location
-                incident.save()
+            
+            # Always update report_type and location fields
+            incident.report_type = serializer.validated_data['type']
+            incident.location = location if location else incident.beacon.location_name
+            incident.save()
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
