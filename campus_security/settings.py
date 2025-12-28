@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
+    'cloudinary',
+    'cloudinary_storage',
     # Local apps
     'accounts',
     'incidents',
@@ -130,13 +132,20 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files (User uploads) - Must be persistent on Render
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# Cloudinary Configuration for Image Storage
+import cloudinary
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', ''),
+    api_key=os.getenv('CLOUDINARY_API_KEY', ''),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET', '')
+)
 
-# Ensure media directory exists
-import os
-os.makedirs(MEDIA_ROOT, exist_ok=True)
+# Use Cloudinary for media file storage
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+# Media files (User uploads) - Stored on Cloudinary
+MEDIA_URL = '/media/'
+CLOUDINARY_FOLDER = 'resq-campus-security/incidents'
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
