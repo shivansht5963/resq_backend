@@ -12,13 +12,23 @@ class BeaconProximityInline(admin.TabularInline):
     ordering = ('priority',)
 
 
-class IncidentImageInline(admin.TabularInline):
+class IncidentImageInline(admin.StackedInline):
     """Inline admin for displaying images attached to an incident."""
     model = IncidentImage
-    extra = 1
-    fields = ('image', 'description', 'uploaded_by', 'uploaded_at')
-    readonly_fields = ('uploaded_by', 'uploaded_at')
+    extra = 0  # Don't show empty add rows
+    fields = ('image', 'image_preview', 'description', 'uploaded_by', 'uploaded_at')
+    readonly_fields = ('image_preview', 'uploaded_by', 'uploaded_at')
     can_delete = True
+    
+    def image_preview(self, obj):
+        """Show image preview in inline."""
+        if obj.image:
+            return format_html(
+                '<img src="{}" width="300" height="300" style="max-width: 100%; height: auto; object-fit: cover; border-radius: 5px;" />',
+                obj.image.url
+            )
+        return "No image"
+    image_preview.short_description = 'Preview'
 
 
 class IncidentSignalInline(admin.TabularInline):
