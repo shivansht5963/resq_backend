@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import Beacon, BeaconProximity, ESP32Device, Incident, IncidentSignal, IncidentImage
 
 
@@ -14,9 +15,10 @@ class BeaconProximityInline(admin.TabularInline):
 class IncidentImageInline(admin.TabularInline):
     """Inline admin for displaying images attached to an incident."""
     model = IncidentImage
-    extra = 0
-    fields = ('image', 'uploaded_by', 'uploaded_at', 'description')
+    extra = 1
+    fields = ('image', 'description', 'uploaded_by', 'uploaded_at')
     readonly_fields = ('uploaded_by', 'uploaded_at')
+    can_delete = True
 
 
 class IncidentSignalInline(admin.TabularInline):
@@ -146,7 +148,11 @@ class IncidentImageAdmin(admin.ModelAdmin):
     
     def image_preview(self, obj):
         if obj.image:
-            return f'<img src="{obj.image.url}" width="200" height="150" />'
+            return format_html(
+                '<img src="{}" width="300" height="200" style="max-width: 100%; height: auto;" alt="Incident image" />',
+                obj.image.url
+            )
         return "No image"
+    image_preview.short_description = 'Preview'
     image_preview.allow_tags = True
     image_preview.short_description = 'Preview'

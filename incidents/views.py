@@ -147,7 +147,22 @@ class IncidentViewSet(viewsets.ModelViewSet):
             "incident": {...}
         }
         """
-        serializer = IncidentReportSerializer(data=request.data)
+        # Handle multipart/form-data: combine request.POST and request.FILES
+        data = request.POST.dict()
+        images_list = request.FILES.getlist('images', [])
+        
+        # Validate image count early (max 3)
+        if len(images_list) > 3:
+            return Response(
+                {'error': 'Maximum 3 images allowed per report'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Add images to data for serializer validation
+        if images_list:
+            data['images'] = images_list
+        
+        serializer = IncidentReportSerializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
@@ -164,14 +179,6 @@ class IncidentViewSet(viewsets.ModelViewSet):
         if not beacon_id and not location:
             return Response(
                 {'error': 'Either beacon_id or location must be provided'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Validate image count (max 3)
-        images = request.FILES.getlist('images', [])
-        if len(images) > 3:
-            return Response(
-                {'error': 'Maximum 3 images allowed per report'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -203,8 +210,9 @@ class IncidentViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Store images (max 3)
+        # Store images (max 3) - get from validated serializer data
         image_objects = []
+        images = serializer.validated_data.get('images', [])
         for idx, image_file in enumerate(images[:3]):
             incident_image = IncidentImage.objects.create(
                 incident=incident,
