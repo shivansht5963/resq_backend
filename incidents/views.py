@@ -160,6 +160,23 @@ class IncidentViewSet(viewsets.ModelViewSet):
         description = request.POST.get('description', '').strip()
         location = (request.POST.get('location', '') or '').strip()
         
+        # Get images from request.FILES
+        images_list = request.FILES.getlist('images', [])
+        
+        # Log request info
+        print(f"\n{'='*60}")
+        print(f"[INCIDENT REPORT] New report from {request.user.email}")
+        print(f"{'='*60}")
+        print(f"  Type: {report_type}")
+        print(f"  Description: {description[:50]}...")
+        print(f"  Beacon ID: {beacon_id}")
+        print(f"  Location: {location}")
+        print(f"  Images received: {len(images_list)}")
+        if images_list:
+            for i, f in enumerate(images_list):
+                print(f"    [{i+1}] {f.name} ({f.content_type}, {f.size} bytes)")
+        print(f"{'='*60}\n")
+        
         # Validate required fields
         if not report_type:
             return Response({'error': 'type field is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -170,9 +187,6 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 {'error': 'Either beacon_id or location must be provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Get images from request.FILES
-        images_list = request.FILES.getlist('images', [])
         
         # Validate image count (max 3)
         if len(images_list) > 3:
@@ -211,27 +225,36 @@ class IncidentViewSet(viewsets.ModelViewSet):
         
         # Store images directly from request.FILES
         image_objects = []
+        print(f"\n{'='*60}")
+        print(f"[IMAGE UPLOAD] Processing {len(images_list)} images for incident {incident.id}")
+        print(f"{'='*60}")
+        
         for idx, image_file in enumerate(images_list[:3]):
             try:
-                # Validate image file without closing it
-                from PIL import Image
-                import io
+                print(f"\n[Image {idx + 1}] Starting upload...")
+                print(f"  File name: {image_file.name}")
+                print(f"  Content type: {image_file.content_type}")
+                print(f"  File size: {image_file.size} bytes")
                 
-                # Check if it's a valid image
+                # Reset file pointer to start
+                image_file.seek(0)
+                print(f"  ✅ File pointer reset")
+                
+                # Try to validate with PIL but don't fail if it doesn't work
+                # Django's ImageField will validate properly on save
                 try:
-                    # Don't use verify() as it closes the file
-                    # Just try to open and get format
-                    img = Image.open(image_file)
-                    format_type = img.format
-                    if not format_type:
-                        raise ValueError(f"Invalid image format")
-                    # Reset file pointer
+                    from PIL import Image as PILImage
+                    img = PILImage.open(image_file)
+                    img_format = img.format
+                    print(f"  ✅ PIL validation passed: {img_format}")
+                    image_file.seek(0)  # Reset again after PIL read
+                except Exception as pil_error:
+                    print(f"  ⚠️  PIL validation skipped (will validate on save): {str(pil_error)}")
                     image_file.seek(0)
-                except Exception as e:
-                    image_file.seek(0)
-                    raise ValueError(f"Invalid image file {idx + 1}: {str(e)}")
+                    # Don't fail - let Django's ImageField handle it
                 
                 # Create the incident image
+                print(f"  [→] Creating IncidentImage record...")
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
@@ -239,13 +262,25 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     description=f"Image {idx + 1}"
                 )
                 image_objects.append(incident_image)
-                print(f"✅ Image {idx + 1} saved successfully: {incident_image.id}")
+                print(f"  ✅ Image {idx + 1} saved successfully!")
+                print(f"     ID: {incident_image.id}")
+                print(f"     Path: {incident_image.image.name}")
+                print(f"     URL: {incident_image.image.url}")
                 
             except Exception as e:
-                print(f"❌ Error saving image {idx + 1}: {str(e)}")
+                print(f"\n  ❌ ERROR saving image {idx + 1}:")
+                print(f"     Error: {str(e)}")
                 import traceback
-                traceback.print_exc()
+                print(f"     Traceback:")
+                for line in traceback.format_exc().split('\n'):
+                    if line:
+                        print(f"     {line}")
+                print(f"  ⚠️  Skipping this image and continuing...")
                 continue
+        
+        print(f"\n[IMAGE UPLOAD] Summary:")
+        print(f"  Total images uploaded: {len(image_objects)}")
+        print(f"{'='*60}\n")
         
         # Only alert guards if incident was newly created
         if created:

@@ -171,11 +171,24 @@ Content-Disposition: form-data; name="location"
 
 Library 3F, Main Entrance
 ------WebKitFormBoundary
-Content-Disposition: form-data; name="images"; filename="incident_photo_1.jpg"
+Content-Disposition: form-data; name="images"; filename="C:\Users\Shivansh\OneDrive\Desktop\resq_backend\test1.png"
 Content-Type: image/jpeg
 
 [Image data would go here - use REST client's file upload feature]
 ------WebKitFormBoundary--
+
+# In PowerShell, use this format:
+$token = "0ae475f9cf39e1134b4003d17a2b1b9f47b1e386"
+$imagePath = "C:\Users\Shivansh\OneDrive\Desktop\resq_backend\test1.png"
+
+curl.exe -X POST "http://localhost:8000/api/incidents/report/" `
+  -H "Authorization: Token $token" `
+  -F "beacon_id=safe:uuid:403:403" `
+  -F "type=Test" `
+  -F "description=Test incident" `
+  -F "location=Test Location" `
+  -F "images=@`"$imagePath`""
+
 
 ### 2.1h Report Location-Based Incident (No Beacon)
 POST {{baseUrl}}/incidents/report/
