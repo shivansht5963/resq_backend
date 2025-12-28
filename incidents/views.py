@@ -110,7 +110,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'status': 'incident_created' if created else 'signal_added_to_existing',
             'incident_id': str(incident.id),
             'signal_id': signal.id,
-            'incident': IncidentDetailedSerializer(incident).data
+            'incident': IncidentDetailedSerializer(incident, context={'request': request}).data
         }
         
         return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
@@ -244,8 +244,8 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'incident_id': str(incident.id),
             'signal_id': signal.id,
             'report_type': report_type,
-            'images': IncidentImageSerializer(image_objects, many=True).data,
-            'incident': IncidentDetailedSerializer(incident).data
+            'images': IncidentImageSerializer(image_objects, many=True, context={'request': request}).data,
+            'incident': IncidentDetailedSerializer(incident, context={'request': request}).data
         }
         
         return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
@@ -270,7 +270,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
         ).update(is_active=False)
         
         return Response(
-            IncidentDetailedSerializer(incident).data,
+            IncidentDetailedSerializer(incident, context={'request': request}).data,
             status=status.HTTP_200_OK
         )
     
