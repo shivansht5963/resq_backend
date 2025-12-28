@@ -147,6 +147,21 @@ class IncidentViewSet(viewsets.ModelViewSet):
             "incident": {...}
         }
         """
+        # DEBUG: Check storage configuration at START
+        from django.conf import settings
+        print(f"\n{'='*60}")
+        print(f"[STORAGE CONFIG CHECK]")
+        print(f"{'='*60}")
+        print(f"  DEFAULT_FILE_STORAGE: {settings.DEFAULT_FILE_STORAGE}")
+        print(f"  CLOUDINARY_CLOUD_NAME: {settings.CLOUDINARY_CLOUD_NAME}")
+        print(f"  CLOUDINARY_API_KEY: {'SET' if settings.CLOUDINARY_API_KEY else 'NOT SET'}")
+        print(f"  CLOUDINARY_API_SECRET: {'SET' if settings.CLOUDINARY_API_SECRET else 'NOT SET'}")
+        
+        # Check if Cloudinary is actually configured
+        import cloudinary
+        print(f"  Cloudinary module loaded: {cloudinary.config().cloud_name}")
+        print(f"{'='*60}\n")
+        
         # Check user role first
         if request.user.role != 'STUDENT':
             return Response(
@@ -255,6 +270,8 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 
                 # Create the incident image
                 print(f"  [→] Creating IncidentImage record...")
+                print(f"      Using storage backend: {IncidentImage._meta.get_field('image').storage}")
+                
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
@@ -264,6 +281,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 image_objects.append(incident_image)
                 print(f"  ✅ Image {idx + 1} saved successfully!")
                 print(f"     ID: {incident_image.id}")
+                print(f"     Storage class: {incident_image.image.storage.__class__.__name__}")
                 print(f"     Path: {incident_image.image.name}")
                 print(f"     URL: {incident_image.image.url}")
                 

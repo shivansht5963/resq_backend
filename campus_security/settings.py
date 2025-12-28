@@ -141,7 +141,7 @@ CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
 
 # Debug: Log if Cloudinary is configured
 if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
-    print(f"✅ CLOUDINARY CONFIGURED: {CLOUDINARY_CLOUD_NAME}")
+    print("[OK] CLOUDINARY CONFIGURED: {}".format(CLOUDINARY_CLOUD_NAME))
     cloudinary.config(
         cloud_name=CLOUDINARY_CLOUD_NAME,
         api_key=CLOUDINARY_API_KEY,
@@ -150,10 +150,10 @@ if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
     DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
     MEDIA_URL = '/media/'
 else:
-    print("⚠️  CLOUDINARY NOT CONFIGURED - Using local disk storage")
-    print(f"   CLOUDINARY_CLOUD_NAME: {CLOUDINARY_CLOUD_NAME}")
-    print(f"   CLOUDINARY_API_KEY: {CLOUDINARY_API_KEY}")
-    print(f"   CLOUDINARY_API_SECRET: {CLOUDINARY_API_SECRET}")
+    print("[WARNING] CLOUDINARY NOT CONFIGURED - Using local disk storage")
+    print("   CLOUDINARY_CLOUD_NAME: {}".format(CLOUDINARY_CLOUD_NAME))
+    print("   CLOUDINARY_API_KEY: {}".format(CLOUDINARY_API_KEY))
+    print("   CLOUDINARY_API_SECRET: {}".format(CLOUDINARY_API_SECRET))
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     MEDIA_URL = '/media/'
 
