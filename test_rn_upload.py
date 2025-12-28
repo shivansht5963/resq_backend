@@ -19,7 +19,7 @@ from incidents.models import IncidentImage, Incident
 User = get_user_model()
 
 print("=" * 80)
-print("REACT NATIVE IMAGE UPLOAD TEST")
+print("REACT NATIVE IMAGE UPLOAD TEST (LOCAL)")
 print("=" * 80)
 
 # Get or create test user
