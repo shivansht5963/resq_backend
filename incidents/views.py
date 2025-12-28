@@ -153,13 +153,8 @@ class IncidentViewSet(viewsets.ModelViewSet):
         print(f"[STORAGE CONFIG CHECK]")
         print(f"{'='*60}")
         print(f"  DEFAULT_FILE_STORAGE: {settings.DEFAULT_FILE_STORAGE}")
-        print(f"  CLOUDINARY_CLOUD_NAME: {settings.CLOUDINARY_CLOUD_NAME}")
-        print(f"  CLOUDINARY_API_KEY: {'SET' if settings.CLOUDINARY_API_KEY else 'NOT SET'}")
-        print(f"  CLOUDINARY_API_SECRET: {'SET' if settings.CLOUDINARY_API_SECRET else 'NOT SET'}")
-        
-        # Check if Cloudinary is actually configured
-        import cloudinary
-        print(f"  Cloudinary module loaded: {cloudinary.config().cloud_name}")
+        print(f"  MEDIA_ROOT: {settings.MEDIA_ROOT}")
+        print(f"  MEDIA_URL: {settings.MEDIA_URL}")
         print(f"{'='*60}\n")
         
         # Check user role first
