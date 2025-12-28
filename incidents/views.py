@@ -213,17 +213,25 @@ class IncidentViewSet(viewsets.ModelViewSet):
         image_objects = []
         for idx, image_file in enumerate(images_list[:3]):
             try:
-                # Validate image file
+                # Validate image file without closing it
                 from PIL import Image
                 import io
                 
                 # Check if it's a valid image
                 try:
+                    # Don't use verify() as it closes the file
+                    # Just try to open and get format
                     img = Image.open(image_file)
-                    img.verify()  # Verify image integrity
+                    format_type = img.format
+                    if not format_type:
+                        raise ValueError(f"Invalid image format")
+                    # Reset file pointer
+                    image_file.seek(0)
                 except Exception as e:
+                    image_file.seek(0)
                     raise ValueError(f"Invalid image file {idx + 1}: {str(e)}")
                 
+                # Create the incident image
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
@@ -231,13 +239,22 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     description=f"Image {idx + 1}"
                 )
                 image_objects.append(incident_image)
+                print(f"✅ Image {idx + 1} saved successfully: {incident_image.id}")
+                
             except Exception as e:
-                print(f"Error saving image {idx + 1}: {str(e)}")
+                print(f"❌ Error saving image {idx + 1}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         # Only alert guards if incident was newly created
         if created:
             alert_guards_for_incident(incident)
+        
+        # Refresh incident from database to get all images
+        incident.refresh_from_db()
+        
+        print(f"Incident {incident.id} has {incident.images.count()} images")
         
         response_data = {
             'status': 'incident_created' if created else 'signal_added_to_existing',

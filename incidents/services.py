@@ -61,6 +61,8 @@ def get_or_create_incident_with_signals(
             beacon_id=beacon_id,
             defaults={
                 'uuid': beacon_id,
+                'major': 0,
+                'minor': 0,
                 'location_name': beacon_id.replace('location:', '').replace('_', ' ').title(),
                 'building': 'Virtual Location',
                 'floor': 0,
