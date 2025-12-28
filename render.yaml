@@ -10,4 +10,8 @@ services:
       - key: DEBUG
         value: "True"
       - key: DJANGO_SETTINGS_MODULE
-        value: campus_security.settings
+        value: campus_security.settings    # Persistent volume for media uploads
+    disk:
+      name: media_volume
+      mountPath: /opt/render/project/src/media
+      sizeGB: 1
