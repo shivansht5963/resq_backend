@@ -30,6 +30,11 @@ urlpatterns = [
     path('api/', include('ai_engine.urls')),
 ]
 
-# Serve media files in development
+# Serve media files (both in development and production)
+# In production on Render, WhiteNoise handles this via wsgi.py
+# In development, Django's static file handler handles it
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Serve static files in development
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
