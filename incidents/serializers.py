@@ -8,11 +8,21 @@ class IncidentImageSerializer(serializers.ModelSerializer):
     """Serializer for incident images."""
     
     uploaded_by_email = serializers.CharField(source='uploaded_by.email', read_only=True)
+    image = serializers.SerializerMethodField()
     
     class Meta:
         model = IncidentImage
         fields = ('id', 'image', 'uploaded_by_email', 'uploaded_at', 'description')
         read_only_fields = ('id', 'uploaded_at', 'uploaded_by_email')
+    
+    def get_image(self, obj):
+        """Return absolute URL for image."""
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
 
 class BeaconSerializer(serializers.ModelSerializer):

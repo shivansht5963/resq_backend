@@ -148,11 +148,15 @@ class IncidentImageAdmin(admin.ModelAdmin):
     
     def image_preview(self, obj):
         if obj.image:
-            return format_html(
-                '<img src="{}" width="300" height="200" style="max-width: 100%; height: auto;" alt="Incident image" />',
-                obj.image.url
-            )
+            # Ensure we have a proper file stored
+            try:
+                image_url = obj.image.url
+                return format_html(
+                    '<img src="{}" width="300" height="200" style="max-width: 100%; height: auto; border-radius: 5px;" alt="Incident image" />',
+                    image_url
+                )
+            except Exception as e:
+                return f"Error loading image: {str(e)}"
         return "No image"
     image_preview.short_description = 'Preview'
-    image_preview.allow_tags = True
-    image_preview.short_description = 'Preview'
+

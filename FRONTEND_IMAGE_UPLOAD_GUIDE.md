@@ -104,6 +104,22 @@ const handleImageUpload = async (formData) => {
 
 ## Common Issues & Fixes
 
+### ❌ Image not opening when downloaded
+**Cause:** Corrupted image file or invalid format
+**Fix:** 
+- Ensure file is a valid JPG/PNG/GIF/WebP image before upload
+- Test image locally before uploading
+- Try uploading from different device/camera
+- Compress image using image tool first
+
+### ❌ Image shows broken link in admin preview
+**Cause:** Media files not being served or image URL is wrong
+**Fix:**
+- Verify `/media/` URLs in response are absolute (not relative)
+- Check that Django is serving media files (WhiteNoise in production)
+- On Render: Ensure disk volume is mounted (`render.yaml` disks section)
+- Check file permissions on server
+
 ### ❌ Using JSON Content-Type
 **Wrong:**
 ```javascript

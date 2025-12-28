@@ -171,7 +171,7 @@ Content-Disposition: form-data; name="location"
 
 Library 3F, Main Entrance
 ------WebKitFormBoundary
-Content-Disposition: form-data; name="images"; filename="test_image.jpg"
+Content-Disposition: form-data; name="images"; filename="test1.png"
 Content-Type: image/jpeg
 
 [Image data would go here - use REST client's file upload feature]

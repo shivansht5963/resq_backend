@@ -213,6 +213,17 @@ class IncidentViewSet(viewsets.ModelViewSet):
         image_objects = []
         for idx, image_file in enumerate(images_list[:3]):
             try:
+                # Validate image file
+                from PIL import Image
+                import io
+                
+                # Check if it's a valid image
+                try:
+                    img = Image.open(image_file)
+                    img.verify()  # Verify image integrity
+                except Exception as e:
+                    raise ValueError(f"Invalid image file {idx + 1}: {str(e)}")
+                
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
