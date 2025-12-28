@@ -134,17 +134,30 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Cloudinary Configuration for Image Storage
 import cloudinary
-cloudinary.config(
-    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', ''),
-    api_key=os.getenv('CLOUDINARY_API_KEY', ''),
-    api_secret=os.getenv('CLOUDINARY_API_SECRET', '')
-)
 
-# Use Cloudinary for media file storage
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
 
-# Media files (User uploads) - Stored on Cloudinary
-MEDIA_URL = '/media/'
+# Debug: Log if Cloudinary is configured
+if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+    print(f"✅ CLOUDINARY CONFIGURED: {CLOUDINARY_CLOUD_NAME}")
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET
+    )
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    MEDIA_URL = '/media/'
+else:
+    print("⚠️  CLOUDINARY NOT CONFIGURED - Using local disk storage")
+    print(f"   CLOUDINARY_CLOUD_NAME: {CLOUDINARY_CLOUD_NAME}")
+    print(f"   CLOUDINARY_API_KEY: {CLOUDINARY_API_KEY}")
+    print(f"   CLOUDINARY_API_SECRET: {CLOUDINARY_API_SECRET}")
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_URL = '/media/'
+
+# Cloudinary folder for organizing images
 CLOUDINARY_FOLDER = 'resq-campus-security/incidents'
 
 # File upload settings
