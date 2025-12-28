@@ -147,80 +147,82 @@ class IncidentViewSet(viewsets.ModelViewSet):
             "incident": {...}
         }
         """
-        # Handle multipart/form-data: combine request.POST and request.FILES
-        data = request.POST.dict()
-        images_list = request.FILES.getlist('images', [])
-        
-        # Validate image count early (max 3)
-        if len(images_list) > 3:
-            return Response(
-                {'error': 'Maximum 3 images allowed per report'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Add images to data for serializer validation
-        if images_list:
-            data['images'] = images_list
-        
-        serializer = IncidentReportSerializer(data=data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+        # Check user role first
         if request.user.role != 'STUDENT':
             return Response(
                 {'error': 'Only students can report incidents'},
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # Validate that either beacon_id or location is provided
-        beacon_id = serializer.validated_data.get('beacon_id', '').strip()
-        location = serializer.validated_data.get('location', '').strip()
+        # Extract form data from request.POST (not request.data for multipart)
+        beacon_id = (request.POST.get('beacon_id', '') or '').strip()
+        report_type = request.POST.get('type', '').strip()
+        description = request.POST.get('description', '').strip()
+        location = (request.POST.get('location', '') or '').strip()
         
+        # Validate required fields
+        if not report_type:
+            return Response({'error': 'type field is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not description:
+            return Response({'error': 'description field is required'}, status=status.HTTP_400_BAD_REQUEST)
         if not beacon_id and not location:
             return Response(
                 {'error': 'Either beacon_id or location must be provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Get images from request.FILES
+        images_list = request.FILES.getlist('images', [])
+        
+        # Validate image count (max 3)
+        if len(images_list) > 3:
+            return Response(
+                {'error': 'Maximum 3 images allowed per report'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         try:
-            # For location-based reports, create a virtual beacon_id or use location
+            # Create or get incident based on beacon or location
             if beacon_id:
                 # Use actual beacon if provided
                 incident, created, signal = get_or_create_incident_with_signals(
                     beacon_id=beacon_id,
                     signal_type=IncidentSignal.SignalType.STUDENT_REPORT,
                     source_user_id=request.user.id,
-                    description=serializer.validated_data['description']
+                    description=description
                 )
             else:
                 # For location-only reports, use location as beacon_id
-                # This allows grouping of reports at the same location
                 virtual_beacon_id = f"location:{location.lower().replace(' ', '_')}"
                 incident, created, signal = get_or_create_incident_with_signals(
                     beacon_id=virtual_beacon_id,
                     signal_type=IncidentSignal.SignalType.STUDENT_REPORT,
                     source_user_id=request.user.id,
-                    description=serializer.validated_data['description']
+                    description=description
                 )
             
             # Always update report_type and location fields
-            incident.report_type = serializer.validated_data['type']
+            incident.report_type = report_type
             incident.location = location if location else incident.beacon.location_name
             incident.save()
+            
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Store images (max 3) - get from validated serializer data
+        # Store images directly from request.FILES
         image_objects = []
-        images = serializer.validated_data.get('images', [])
-        for idx, image_file in enumerate(images[:3]):
-            incident_image = IncidentImage.objects.create(
-                incident=incident,
-                image=image_file,
-                uploaded_by=request.user,
-                description=f"Image {idx + 1}" if not image_file.name else image_file.name
-            )
-            image_objects.append(incident_image)
+        for idx, image_file in enumerate(images_list[:3]):
+            try:
+                incident_image = IncidentImage.objects.create(
+                    incident=incident,
+                    image=image_file,
+                    uploaded_by=request.user,
+                    description=f"Image {idx + 1}"
+                )
+                image_objects.append(incident_image)
+            except Exception as e:
+                print(f"Error saving image {idx + 1}: {str(e)}")
+                continue
         
         # Only alert guards if incident was newly created
         if created:
@@ -230,7 +232,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
             'status': 'incident_created' if created else 'signal_added_to_existing',
             'incident_id': str(incident.id),
             'signal_id': signal.id,
-            'report_type': serializer.validated_data['type'],
+            'report_type': report_type,
             'images': IncidentImageSerializer(image_objects, many=True).data,
             'incident': IncidentDetailedSerializer(incident).data
         }

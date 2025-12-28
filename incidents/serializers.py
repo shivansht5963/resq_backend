@@ -196,12 +196,6 @@ class IncidentReportSerializer(serializers.Serializer):
     type = serializers.CharField(required=True, max_length=100, help_text="Report type (e.g., Safety Concern, Suspicious Activity, Infrastructure Issue)")
     description = serializers.CharField(required=True, max_length=1000, help_text="Detailed description of the incident")
     location = serializers.CharField(required=False, allow_blank=True, max_length=255, help_text="Location description if no beacon available")
-    images = serializers.ListField(
-        child=serializers.FileField(),
-        required=False,
-        allow_empty=True,
-        help_text="Images (max 3, optional)"
-    )
 
     class Meta:
-        fields = ('beacon_id', 'type', 'description', 'location', 'images')
+        fields = ('beacon_id', 'type', 'description', 'location')
