@@ -251,26 +251,16 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 print(f"  Content type: {image_file.content_type}")
                 print(f"  File size: {image_file.size} bytes")
                 
-                # Reset file pointer to start
+                # Reset file pointer to start before saving
                 image_file.seek(0)
-                print(f"  ✅ File pointer reset")
+                print(f"  ✅ File pointer reset to position 0")
                 
-                # Try to validate with PIL but don't fail if it doesn't work
-                # Django's ImageField will validate properly on save
-                try:
-                    from PIL import Image as PILImage
-                    img = PILImage.open(image_file)
-                    img_format = img.format
-                    print(f"  ✅ PIL validation passed: {img_format}")
-                    image_file.seek(0)  # Reset again after PIL read
-                except Exception as pil_error:
-                    print(f"  ⚠️  PIL validation skipped (will validate on save): {str(pil_error)}")
-                    image_file.seek(0)
-                    # Don't fail - let Django's ImageField handle it
+                # Don't use PIL validation - it can corrupt the file pointer state
+                # Let Cloudinary and Django's ImageField handle validation
                 
-                # Create the incident image
-                print(f"  [→] Creating IncidentImage record...")
-                print(f"      Using storage backend: {IncidentImage._meta.get_field('image').storage}")
+                # Save to storage (Cloudinary)
+                print(f"  [→] Uploading to Cloudinary...")
+                print(f"      Storage backend: {IncidentImage._meta.get_field('image').storage.__class__.__name__}")
                 
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
@@ -279,11 +269,10 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     description=f"Image {idx + 1}"
                 )
                 image_objects.append(incident_image)
-                print(f"  ✅ Image {idx + 1} saved successfully!")
+                print(f"  ✅ Image {idx + 1} uploaded successfully to Cloudinary!")
                 print(f"     ID: {incident_image.id}")
-                print(f"     Storage class: {incident_image.image.storage.__class__.__name__}")
-                print(f"     Path: {incident_image.image.name}")
-                print(f"     URL: {incident_image.image.url}")
+                print(f"     Cloudinary URL: {incident_image.image.url}")
+                print(f"     File path: {incident_image.image.name}")
                 
             except Exception as e:
                 print(f"\n  ❌ ERROR saving image {idx + 1}:")
