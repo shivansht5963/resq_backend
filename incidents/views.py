@@ -246,33 +246,46 @@ class IncidentViewSet(viewsets.ModelViewSet):
         
         for idx, image_file in enumerate(images_list[:3]):
             try:
+                from io import BytesIO
+                
                 print(f"\n[Image {idx + 1}] Starting upload...")
                 print(f"  File name: {image_file.name}")
                 print(f"  Content type: {image_file.content_type}")
                 print(f"  File size: {image_file.size} bytes")
                 
-                # Reset file pointer to start before saving
+                # Read file content into bytes
                 image_file.seek(0)
-                print(f"  ✅ File pointer reset to position 0")
+                file_content = image_file.read()
+                print(f"  Read {len(file_content)} bytes from file")
                 
-                # Don't use PIL validation - it can corrupt the file pointer state
-                # Let Cloudinary and Django's ImageField handle validation
+                # Create fresh BytesIO object - this ensures Cloudinary gets a clean file
+                image_bytes = BytesIO(file_content)
+                image_bytes.name = image_file.name
+                image_bytes.content_type = image_file.content_type
                 
-                # Save to storage (Cloudinary)
+                # Verify file starts with image magic bytes
+                if file_content[:3] == b'\xff\xd8\xff':
+                    print(f"  ✅ JPEG file detected (magic bytes: FF D8 FF)")
+                elif file_content[:8] == b'\x89PNG\r\n\x1a\n':
+                    print(f"  ✅ PNG file detected (magic bytes: 89 50 4E 47)")
+                else:
+                    print(f"  ⚠️  Unknown format - first 10 bytes: {file_content[:10].hex()}")
+                
+                # Save to storage (Cloudinary) using fresh BytesIO
                 print(f"  [→] Uploading to Cloudinary...")
                 print(f"      Storage backend: {IncidentImage._meta.get_field('image').storage.__class__.__name__}")
                 
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
-                    image=image_file,
+                    image=image_bytes,
                     uploaded_by=request.user,
                     description=f"Image {idx + 1}"
                 )
                 image_objects.append(incident_image)
                 print(f"  ✅ Image {idx + 1} uploaded successfully to Cloudinary!")
                 print(f"     ID: {incident_image.id}")
-                print(f"     Cloudinary URL: {incident_image.image.url}")
                 print(f"     File path: {incident_image.image.name}")
+                print(f"     Cloudinary URL: {incident_image.image.url}")
                 
             except Exception as e:
                 print(f"\n  ❌ ERROR saving image {idx + 1}:")
