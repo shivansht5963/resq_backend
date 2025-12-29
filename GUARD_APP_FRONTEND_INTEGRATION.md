@@ -2,7 +2,7 @@
 
 ## Configuration
 ```
-REACT_APP_API_URL=http://localhost:8000
+REACT_APP_API_URL=https://resq-server.onrender.com/api
 REACT_APP_API_TIMEOUT=30000
 REACT_APP_DEBUG_MODE=false
 ```
@@ -12,7 +12,7 @@ REACT_APP_DEBUG_MODE=false
 ## 1. Authentication
 
 ### Login
-**`POST /api/accounts/login/`**
+**`POST https://resq-server.onrender.com/api/accounts/login/`**
 ```json
 {
   "username": "guard_user",
@@ -26,76 +26,61 @@ REACT_APP_DEBUG_MODE=false
   "user": {
     "id": 1,
     "username": "guard_user",
-    "email": "user@example.com",
-    "role": "guard"
+    "email": "user@example.com"
   }
 }
 ```
 
-### Register
-**`POST /api/accounts/register/`**
-```json
-{
-  "username": "new_guard",
-  "email": "guard@example.com",
-  "password": "password123",
-  "role": "guard"
-}
-```
-
 ### Logout
-**`POST /api/accounts/logout/`** | Header: `Authorization: Bearer <token>`
+**`POST https://resq-server.onrender.com/api/accounts/logout/`** | Header: `Authorization: Token <token>`
 
 ---
 
 ## 2. Incidents
 
 ### Report Incident
-**`POST /api/incidents/report/`** | Header: `Authorization: Bearer <token>`
+**`POST https://resq-server.onrender.com/api/incidents/incidents/report/`** | Header: `Authorization: Token <token>`
 ```json
 {
-  "incident_type": "theft",
-  "location": {"latitude": 12.9716, "longitude": 77.5946},
+  "type": "theft",
   "description": "Suspicious activity near gate",
-  "severity": "high",
-  "reporters": [1],
-  "media": "file_upload"
+  "location": "Gate A",
+  "beacon_id": "beacon_001"
 }
 ```
 **Response (201):**
 ```json
 {
   "id": 5,
-  "incident_type": "theft",
+  "type": "theft",
   "status": "reported",
-  "created_at": "2025-12-29T10:30:00Z",
-  "location": {"latitude": 12.9716, "longitude": 77.5946}
+  "location": "Gate A",
+  "images": ["https://storage.googleapis.com/..."]
 }
 ```
 
 ### Get Incidents
-**`GET /api/incidents/?status=active&limit=10`** | Header: `Authorization: Bearer <token>`
+**`GET https://resq-server.onrender.com/api/incidents/incidents/`** | Header: `Authorization: Token <token>`
 **Response (200):**
 ```json
 {
   "count": 15,
-  "next": "http://localhost:8000/api/incidents/?page=2",
   "results": [
-    {"id": 5, "incident_type": "theft", "status": "active", "severity": "high"},
-    {"id": 4, "incident_type": "trespassing", "status": "investigating", "severity": "medium"}
+    {"id": 5, "type": "theft", "status": "active", "location": "Gate A"},
+    {"id": 4, "type": "trespassing", "status": "reported", "location": "Boundary"}
   ]
 }
 ```
 
 ### Get Incident Detail
-**`GET /api/incidents/{id}/`** | Header: `Authorization: Bearer <token>`
+**`GET https://resq-server.onrender.com/api/incidents/incidents/{id}/`** | Header: `Authorization: Token <token>`
 
-### Update Incident
-**`PATCH /api/incidents/{id}/`** | Header: `Authorization: Bearer <token>`
+### SOS Report
+**`POST https://resq-server.onrender.com/api/incidents/incidents/report_sos/`** | Header: `Authorization: Token <token>`
 ```json
 {
-  "status": "investigating",
-  "assigned_to": 2
+  "beacon_id": "beacon_001",
+  "location": "Emergency Location"
 }
 ```
 
@@ -104,76 +89,70 @@ REACT_APP_DEBUG_MODE=false
 ## 3. Security Alerts
 
 ### Create Alert
-**`POST /api/security/alerts/`** | Header: `Authorization: Bearer <token>`
+**`POSGuard Profile & Alerts
+
+### Get Guard Profile
+**`GET https://resq-server.onrender.com/api/security/guards/`** | Header: `Authorization: Token <token>`
+**Response (200):**
 ```json
 {
-  "alert_type": "suspicious_activity",
-  "location": {"latitude": 12.9716, "longitude": 77.5946},
-  "priority": "high",
-  "description": "Unknown person near boundary"
+  "id": 1,
+  "user": {"username": "guard_user", "email": "user@example.com"},
+  "status": "active",
+  "area_assigned": "Main Gate"
+}
+```
+
+### Get Alerts
+**`GET https://resq-server.onrender.com/api/security/alerts/`** | Header: `Authorization: Token <token>`
+**Response (200):**
+```json
+{
+  "count": 8,
+  "results": [
+    {"id": 12, "alert_type": "suspicious_activity", "status": "active", "priority": "high"},
+    {"id": 11, "alert_type": "system_alert", "status": "resolved", "priority": "low"}
+  ]
+}
+```
+
+### Update Alert
+**`PATCH https://resq-server.onrender.com/api/security/alerts/{id}/`** | Header: `Authorization: Token <token>`
+```json
+{
+  "status": "resolved
+---
+
+## 4. Beacons
+
+### Get Beacons
+**`GET https://resq-server.onrender.com/api/incidents/beacons/`** | Header: `Authorization: Token <token>`
+**Response (200):**
+```json
+{
+  "count": 5,
+  "results": [
+    {"id": 1, "beacon_id": "beacon_001", "location": "Gate A", "status": "active"},
+    {"id": 2, "beacon_id": "beacon_002", "location": "Boundary", "status": "active"}
+  ]
+}
+```
+
+### Panic Button
+**`POST https://resq-server.onrender.com/api/incidents/panic/`** | Header: `Authorization: Token <token>`
+```json
+{
+  "beacon_id": "beacon_001",
+  "location": "Gate A"
 }
 ```
 **Response (201):**
 ```json
 {
-  "id": 12,
-  "alert_type": "suspicious_activity",
-  "status": "active",
-  "priority": "high",
-  "created_at": "2025-12-29T10:35:00Z"
+  "status": "success",
+  "message": "Panic alert sent to guards"
 }
 ```
-
-### Get Alerts
-**`GET /api/security/alerts/?priority=high`** | Header: `Authorization: Bearer <token>`
-
-### Resolve Alert
-**`PATCH /api/security/alerts/{id}/`** | Header: `Authorization: Bearer <token>`
-```json
-{
-  "status": "resolved",
-  "resolution_notes": "False alarm - maintenance crew"
-}
-```
-
----
-
-## 4. Chat & Communication
-
-### Get Conversations
-**`GET /api/chat/conversations/`** | Header: `Authorization: Bearer <token>`
-
-### Send Message
-**`POST /api/chat/messages/`** | Header: `Authorization: Bearer <token>`
-```json
-{
-  "conversation": 3,
-  "content": "Backup needed at North Gate",
-  "message_type": "text"
-}
-```
-
-### Get Messages
-**`GET /api/chat/conversations/{id}/messages/`** | Header: `Authorization: Bearer <token>`
-
----
-
-## 5. AI Engine & Beacon
-
-### Report Beacon Event
-**`POST /api/ai_engine/events/`** | Header: `Authorization: Bearer <token>`
-```json
-{
-  "event_type": "proximity_alert",
-  "beacon_id": "beacon_001",
-  "location": {"latitude": 12.9716, "longitude": 77.5946},
-  "intensity": 0.85,
-  "timestamp": "2025-12-29T10:40:00Z"
-}
-```
-
-### Get AI Events
-**`GET /api/ai_engine/events/?event_type=anomaly&limit=20`** | Header: `Authorization: Bearer <token>`
 
 ---
 
@@ -195,3 +174,8 @@ REACT_APP_DEBUG_MODE=false
 - Pagination: Default 20 items per page
 - Image uploads use `multipart/form-data`
 - Timestamps in ISO 8601 format
+Base URL: `https://resq-server.onrender.com/api`
+- All requests use `Content-Type: application/json`
+- Authorization header: `Authorization: Token <your_token>`
+- Image uploads use `multipart/form-data`
+- Pagination: Default 20 items per page
