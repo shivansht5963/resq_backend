@@ -1,0 +1,1 @@
+Hello from RESQ! This is a test file uploaded to Google Cloud Storage.

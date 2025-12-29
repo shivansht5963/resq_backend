@@ -147,21 +147,6 @@ class IncidentViewSet(viewsets.ModelViewSet):
             "incident": {...}
         }
         """
-        # DEBUG: Check storage configuration at START
-        from django.conf import settings
-        print(f"\n{'='*60}")
-        print(f"[STORAGE CONFIG CHECK]")
-        print(f"{'='*60}")
-        print(f"  DEFAULT_FILE_STORAGE: {settings.DEFAULT_FILE_STORAGE}")
-        print(f"  CLOUDINARY_CLOUD_NAME: {settings.CLOUDINARY_CLOUD_NAME}")
-        print(f"  CLOUDINARY_API_KEY: {'SET' if settings.CLOUDINARY_API_KEY else 'NOT SET'}")
-        print(f"  CLOUDINARY_API_SECRET: {'SET' if settings.CLOUDINARY_API_SECRET else 'NOT SET'}")
-        
-        # Check if Cloudinary is actually configured
-        import cloudinary
-        print(f"  Cloudinary module loaded: {cloudinary.config().cloud_name}")
-        print(f"{'='*60}\n")
-        
         # Check user role first
         if request.user.role != 'STUDENT':
             return Response(
@@ -255,8 +240,8 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 image_file.seek(0)
                 print(f"  ✅ File pointer reset to position 0")
                 
-                # Save directly to Cloudinary
-                print(f"  [→] Uploading to Cloudinary...")
+                # Save to GCS
+                print(f"  [→] Uploading to Google Cloud Storage...")
                 print(f"      Storage backend: {IncidentImage._meta.get_field('image').storage.__class__.__name__}")
                 
                 incident_image = IncidentImage.objects.create(
@@ -266,10 +251,10 @@ class IncidentViewSet(viewsets.ModelViewSet):
                     description=f"Image {idx + 1}"
                 )
                 image_objects.append(incident_image)
-                print(f"  ✅ Image {idx + 1} uploaded successfully to Cloudinary!")
+                print(f"  ✅ Image {idx + 1} uploaded successfully to GCS!")
                 print(f"     ID: {incident_image.id}")
                 print(f"     File path: {incident_image.image.name}")
-                print(f"     Cloudinary URL: {incident_image.image.url}")
+                print(f"     GCS URL: {incident_image.image.url}")
                 
             except Exception as e:
                 print(f"\n  ❌ ERROR saving image {idx + 1}:")

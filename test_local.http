@@ -181,7 +181,7 @@ Content-Type: image/jpeg
 $token = "0ae475f9cf39e1134b4003d17a2b1b9f47b1e386"
 $imagePath = "C:\Users\Shivansh\OneDrive\Desktop\resq_backend\test1.png"
 
-curl.exe -X POST "http://https://resq-server.onrender.com/api/incidents/report/" `
+curl.exe -X POST "http://127.0.0.1:8000/api/incidents/report/" `
   -H "Authorization: Token $token" `
   -F "beacon_id=safe:uuid:403:403" `
   -F "type=Test" `

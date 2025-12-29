@@ -12,6 +12,16 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
+from decouple import config
+
+# Load .env file
+import os
+from pathlib import Path
+env_file = Path(__file__).resolve().parent.parent / '.env'
+if env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(env_file)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,8 +52,7 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
-    'cloudinary',
-    'cloudinary_storage',
+    'storages',
     # Local apps
     'accounts',
     'incidents',
@@ -132,33 +141,32 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Cloudinary Configuration for Image Storage
-import cloudinary
+# Google Cloud Storage Configuration for Image Storage
+GS_BUCKET_NAME = config('GS_BUCKET_NAME', default='resq-campus-security')
+GS_PROJECT_ID = config('GS_PROJECT_ID', default='gen-lang-client-0117249847')
+GS_CREDENTIALS = None  # Will use GOOGLE_APPLICATION_CREDENTIALS env var
+# Use signed URLs for temporary access (better security than public access)
+GS_QUERYSTRING_AUTH = True  # Use query string auth with signed URLs
 
-CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
-CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')
-CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET')
-
-# Debug: Log if Cloudinary is configured
-if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
-    print("[OK] CLOUDINARY CONFIGURED: {}".format(CLOUDINARY_CLOUD_NAME))
-    cloudinary.config(
-        cloud_name=CLOUDINARY_CLOUD_NAME,
-        api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET
-    )
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    MEDIA_URL = '/media/'
+# Determine storage backend based on environment
+if GS_BUCKET_NAME and GS_PROJECT_ID:
+    print("[OK] GOOGLE CLOUD STORAGE CONFIGURED")
+    print("   Bucket: {}".format(GS_BUCKET_NAME))
+    print("   Project: {}".format(GS_PROJECT_ID))
+    print("   Using signed URLs for secure image access")
+    DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
+    # Media URL for GCS storage - django-storages will handle URL generation
+    MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
 else:
-    print("[WARNING] CLOUDINARY NOT CONFIGURED - Using local disk storage")
-    print("   CLOUDINARY_CLOUD_NAME: {}".format(CLOUDINARY_CLOUD_NAME))
-    print("   CLOUDINARY_API_KEY: {}".format(CLOUDINARY_API_KEY))
-    print("   CLOUDINARY_API_SECRET: {}".format(CLOUDINARY_API_SECRET))
+    print("[WARNING] GOOGLE CLOUD STORAGE NOT FULLY CONFIGURED")
+    print("   GS_BUCKET_NAME: {}".format(GS_BUCKET_NAME))
+    print("   GS_PROJECT_ID: {}".format(GS_PROJECT_ID))
+    print("   Using local disk storage as fallback")
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     MEDIA_URL = '/media/'
 
-# Cloudinary folder for organizing images
-CLOUDINARY_FOLDER = 'resq-campus-security/incidents'
+# Media files directory in GCS
+MEDIA_ROOT = 'media'
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB

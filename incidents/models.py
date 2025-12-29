@@ -3,14 +3,6 @@ from django.db import models
 from django.conf import settings
 
 
-# Import Cloudinary storage for explicit use
-try:
-    from cloudinary_storage.storage import MediaCloudinaryStorage
-    CLOUDINARY_STORAGE = MediaCloudinaryStorage()
-except ImportError:
-    CLOUDINARY_STORAGE = None
-
-
 class Beacon(models.Model):
     """Physical beacon for indoor location tracking (iBeacon/Eddystone)."""
 
@@ -170,7 +162,6 @@ class IncidentImage(models.Model):
     )
     image = models.ImageField(
         upload_to='incidents/%Y/%m/%d/',
-        storage=CLOUDINARY_STORAGE if CLOUDINARY_STORAGE else None,
         help_text="Incident photo/screenshot"
     )
     uploaded_by = models.ForeignKey(
