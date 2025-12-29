@@ -147,6 +147,19 @@ class IncidentViewSet(viewsets.ModelViewSet):
             "incident": {...}
         }
         """
+<<<<<<< HEAD
+=======
+        # DEBUG: Check storage configuration at START
+        from django.conf import settings
+        print(f"\n{'='*60}")
+        print(f"[STORAGE CONFIG CHECK]")
+        print(f"{'='*60}")
+        print(f"  DEFAULT_FILE_STORAGE: {settings.DEFAULT_FILE_STORAGE}")
+        print(f"  MEDIA_ROOT: {settings.MEDIA_ROOT}")
+        print(f"  MEDIA_URL: {settings.MEDIA_URL}")
+        print(f"{'='*60}\n")
+        
+>>>>>>> 4ba43aad3d157a83245242d54c7effee1c4e505c
         # Check user role first
         if request.user.role != 'STUDENT':
             return Response(

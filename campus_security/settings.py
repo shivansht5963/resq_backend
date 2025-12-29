@@ -34,10 +34,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-(^f17f2)(hva#@6k6p7$8k6i6y74aqz6&&6gpb((v574&c0xjc'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # Render hosts
-ALLOWED_HOSTS = ['*.render.com', 'localhost', '127.0.0.1', '*']
+ALLOWED_HOSTS = ['*.render.com', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -52,7 +52,10 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
+<<<<<<< HEAD
     'storages',
+=======
+>>>>>>> 4ba43aad3d157a83245242d54c7effee1c4e505c
     # Local apps
     'accounts',
     'incidents',
@@ -71,6 +74,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Security settings for production
+SECURE_SSL_REDIRECT = os.getenv('RENDER', False) == 'True'
+SESSION_COOKIE_SECURE = os.getenv('RENDER', False) == 'True'
+CSRF_COOKIE_SECURE = os.getenv('RENDER', False) == 'True'
+SECURE_HSTS_SECONDS = 31536000 if os.getenv('RENDER', False) == 'True' else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('RENDER', False) == 'True'
+SECURE_HSTS_PRELOAD = os.getenv('RENDER', False) == 'True'
 
 ROOT_URLCONF = 'campus_security.urls'
 
@@ -141,6 +152,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+<<<<<<< HEAD
 # Google Cloud Storage Configuration for Image Storage
 GS_BUCKET_NAME = config('GS_BUCKET_NAME', default='resq-campus-security')
 GS_PROJECT_ID = config('GS_PROJECT_ID', default='gen-lang-client-0117249847')
@@ -167,6 +179,19 @@ else:
 
 # Media files directory in GCS
 MEDIA_ROOT = 'media'
+=======
+# Media files configuration (Local disk storage with Render persistent volume)
+# On Render, images are stored in persistent volume at /opt/render/project/src/media
+if os.getenv('RENDER'):
+    # Production on Render - use persistent volume
+    MEDIA_ROOT = '/opt/render/project/src/media'
+else:
+    # Local development
+    MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+MEDIA_URL = '/media/'
+>>>>>>> 4ba43aad3d157a83245242d54c7effee1c4e505c
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
