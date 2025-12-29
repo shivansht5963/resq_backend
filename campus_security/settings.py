@@ -52,10 +52,7 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
-<<<<<<< HEAD
     'storages',
-=======
->>>>>>> 4ba43aad3d157a83245242d54c7effee1c4e505c
     # Local apps
     'accounts',
     'incidents',
@@ -152,7 +149,6 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-<<<<<<< HEAD
 # Google Cloud Storage Configuration for Image Storage
 GS_BUCKET_NAME = config('GS_BUCKET_NAME', default='resq-campus-security')
 GS_PROJECT_ID = config('GS_PROJECT_ID', default='gen-lang-client-0117249847')
@@ -179,19 +175,6 @@ else:
 
 # Media files directory in GCS
 MEDIA_ROOT = 'media'
-=======
-# Media files configuration (Local disk storage with Render persistent volume)
-# On Render, images are stored in persistent volume at /opt/render/project/src/media
-if os.getenv('RENDER'):
-    # Production on Render - use persistent volume
-    MEDIA_ROOT = '/opt/render/project/src/media'
-else:
-    # Local development
-    MEDIA_ROOT = BASE_DIR / 'media'
-
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-MEDIA_URL = '/media/'
->>>>>>> 4ba43aad3d157a83245242d54c7effee1c4e505c
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
