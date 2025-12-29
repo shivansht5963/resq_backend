@@ -40,7 +40,12 @@ SECRET_KEY = 'django-insecure-(^f17f2)(hva#@6k6p7$8k6i6y74aqz6&&6gpb((v574&c0xjc
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 # Render hosts
-ALLOWED_HOSTS = ['*.render.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    'resq-server.onrender.com',
+    '*.render.com', 
+    'localhost', 
+    '127.0.0.1'
+]
 
 
 # Application definition
