@@ -310,10 +310,67 @@ class IncidentViewSet(viewsets.ModelViewSet):
             is_active=True
         ).update(is_active=False)
         
-        return Response(
-            IncidentDetailedSerializer(incident, context={'request': request}).data,
-            status=status.HTTP_200_OK
-        )
+        return Response(IncidentDetailedSerializer(incident, context={'request': request}).data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def status_poll(self, request, pk=None):
+        """
+        Student polls for incident status updates (guard assignment status).
+        
+        Shows:
+        - Guard assignment status (WAITING_FOR_GUARD / GUARD_ASSIGNED / NO_ASSIGNMENT)
+        - Pending alerts to guards
+        - Guard details (when assigned)
+        - Timeline of status changes
+        
+        GET /api/incidents/{id}/status_poll/
+        
+        Response:
+        {
+            "id": "uuid",
+            "status": "CREATED/ASSIGNED/IN_PROGRESS/RESOLVED",
+            "priority": 4,
+            "guard_status": {
+                "status": "WAITING_FOR_GUARD",
+                "message": "Searching for available guard... (2 being contacted)",
+                "pending_alerts": 2
+            },
+            "guard_assignment": null,
+            "alert_status_summary": {
+                "total_alerts": 3,
+                "sent": 2,
+                "accepted": 0,
+                "declined": 1,
+                "expired": 0
+            },
+            "pending_alerts": [
+                {
+                    "id": 1,
+                    "guard": {"id": "uuid", "full_name": "John"},
+                    "priority_rank": 1,
+                    "alert_type": "ASSIGNMENT",
+                    "alert_sent_at": "2025-12-30T10:00:00Z",
+                    "response_deadline": "2025-12-30T10:00:45Z"
+                }
+            ]
+        }
+        """
+        from incidents.serializers import IncidentStatusUpdateSerializer
+        
+        incident = self.get_object()
+        
+        # Only allow student who reported it or admin to poll
+        is_student_reporter = incident.signals.filter(source_user=request.user).exists()
+        is_admin = request.user.role == 'ADMIN'
+        
+        if not (is_student_reporter or is_admin):
+            return Response(
+                {'error': 'You do not have permission to poll this incident'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = IncidentStatusUpdateSerializer(incident, context={'request': request})
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def signals(self, request, pk=None):

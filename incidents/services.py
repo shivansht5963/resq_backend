@@ -189,28 +189,55 @@ def get_initial_priority(signal_type):
     return priority_map.get(signal_type, Incident.Priority.MEDIUM)
 
 
-def alert_guards_for_incident(incident, max_guards=3):
+def alert_guards_for_incident(incident, max_guards=None):
     """
-    Send alerts to nearest guards (via beacon-proximity search).
+    Send alerts to nearest guards based on incident priority.
+    
+    Uses ASSIGNMENT or BROADCAST alert type based on incident severity.
     
     CRITICAL: Only sends alerts if incident has NO active GuardAssignment.
     This prevents re-alerting when new signals arrive on existing incident.
     
-    Uses beacon-proximity logic to find available guards:
-    1. Search incident beacon
-    2. Expand to nearby beacons (priority order)
-    3. Continue until max_guards found or all beacons exhausted
-    
     Args:
-        incident: Incident model instance
-        max_guards: Max number of guards to alert (default 3)
+        incident: Incident instance
+        max_guards: Override number of guards to alert (if None, use priority rules)
     
     Returns:
         list: GuardAlert instances created
     """
-    from security.services import alert_guards_via_beacon_proximity
+    from security.services import (
+        alert_guards_via_beacon_proximity,
+        broadcast_alert_all_guards
+    )
     
-    return alert_guards_via_beacon_proximity(incident, max_guards)
+    # Determine alert fanout rules based on incident priority
+    fanout_rules = get_alert_fanout_rules(incident)
+    alert_type = fanout_rules['alert_type']
+    requires_response = fanout_rules['requires_response']
+    if max_guards is None:
+        max_guards = fanout_rules['max_guards']
+    
+    logger.info(
+        f"[ALERT] Sending {alert_type} alerts for incident {incident.id}",
+        extra={
+            'incident_id': str(incident.id),
+            'priority': incident.priority,
+            'alert_type': alert_type,
+            'max_guards': max_guards
+        }
+    )
+    
+    # BROADCAST alerts go to all active guards (read-only)
+    if alert_type == 'BROADCAST':
+        return broadcast_alert_all_guards(incident, requires_response=False)
+    
+    # ASSIGNMENT alerts use beacon-proximity search
+    return alert_guards_via_beacon_proximity(
+        incident,
+        max_guards=max_guards,
+        alert_type=alert_type,
+        requires_response=requires_response
+    )
 
 
 def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, available_only=True):
@@ -245,18 +272,27 @@ def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, availabl
     return result[:n]
 
 
-def handle_guard_alert_acknowledged(alert):
+def handle_guard_alert_accepted(alert):
     """
-    Guard acknowledged the alert. Create assignment and update incident status.
+    Guard accepted ASSIGNMENT alert.
+    Creates assignment and updates incident status.
     
-    Now uses beacon-proximity logic.
+    Wrapper around security.services function.
     
     Args:
         alert: GuardAlert instance
     """
-    from security.services import handle_guard_alert_acknowledged_via_proximity
+    from security.services import handle_guard_alert_accepted_via_proximity
     
-    return handle_guard_alert_acknowledged_via_proximity(alert)
+    return handle_guard_alert_accepted_via_proximity(alert)
+
+
+def handle_guard_alert_acknowledged(alert):
+    """
+    DEPRECATED: Use handle_guard_alert_accepted instead.
+    Kept for backward compatibility.
+    """
+    return handle_guard_alert_accepted(alert)
 
 
 def handle_guard_alert_declined(alert):
@@ -272,3 +308,71 @@ def handle_guard_alert_declined(alert):
     from security.services import handle_guard_alert_declined_via_proximity
     
     return handle_guard_alert_declined_via_proximity(alert)
+
+
+def get_alert_fanout_rules(incident):
+    """
+    Determine alert type and number of guards based on incident priority & signal types.
+    
+    Fanout Rules (Hackathon-Optimized):
+    
+    CRITICAL Priority → ASSIGNMENT alert to 5 guards
+      (Panic button, violence, etc.)
+    
+    HIGH Priority → ASSIGNMENT alert to 3 guards
+      (Screaming, severe threats)
+    
+    MEDIUM Priority → ASSIGNMENT alert to 2 guards
+      (Student SOS, general reports)
+    
+    SYSTEM-WIDE Events → BROADCAST alert to ALL guards
+      (Fire, evacuation, system emergency)
+    
+    Args:
+        incident: Incident instance
+    
+    Returns:
+        dict: {
+            'alert_type': 'ASSIGNMENT' or 'BROADCAST',
+            'requires_response': True/False,
+            'max_guards': int (number to alert)
+        }
+    """
+    from security.models import GuardAlert
+    
+    priority = incident.priority
+    
+    # Check if this is a system-wide broadcast (e.g., fire, evacuation)
+    is_system_broadcast = False
+    if incident.signals.exists():
+        signal_types = set(incident.signals.values_list('signal_type', flat=True))
+        # Future: Add FIRE_DETECTED, EVACUATION_ALERT, etc. to signal types
+        # For now, only explicit system broadcasts
+        is_system_broadcast = False
+    
+    if is_system_broadcast:
+        return {
+            'alert_type': GuardAlert.AlertType.BROADCAST,
+            'requires_response': False,
+            'max_guards': 999,  # All active guards
+        }
+    
+    # Assignment-based alerts with fanout based on priority
+    if priority == incident.Priority.CRITICAL:
+        return {
+            'alert_type': GuardAlert.AlertType.ASSIGNMENT,
+            'requires_response': True,
+            'max_guards': 5,
+        }
+    elif priority == incident.Priority.HIGH:
+        return {
+            'alert_type': GuardAlert.AlertType.ASSIGNMENT,
+            'requires_response': True,
+            'max_guards': 3,
+        }
+    else:  # MEDIUM, LOW
+        return {
+            'alert_type': GuardAlert.AlertType.ASSIGNMENT,
+            'requires_response': True,
+            'max_guards': 2,
+        }

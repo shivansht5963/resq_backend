@@ -203,15 +203,35 @@ class GuardAlertViewSet(viewsets.ModelViewSet):
         return GuardAlert.objects.all()
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
-    def acknowledge(self, request, pk=None):
-        """Guard acknowledges the alert and will respond."""
-        from incidents.services import handle_guard_alert_acknowledged
+    def accept(self, request, pk=None):
+        """
+        Guard accepts the alert (ASSIGNMENT type only).
+        Creates GuardAssignment and updates incident status.
+        """
+        from incidents.services import handle_guard_alert_accepted
         
         alert = self.get_object()
-        handle_guard_alert_acknowledged(alert)
+        
+        # Only ASSIGNMENT alerts can be accepted
+        if alert.alert_type != 'ASSIGNMENT':
+            return Response(
+                {'error': 'Only ASSIGNMENT alerts can be accepted'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        handle_guard_alert_accepted(alert)
         
         from security.serializers import GuardAlertDetailSerializer
         return Response(GuardAlertDetailSerializer(alert).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def acknowledge(self, request, pk=None):
+        """
+        DEPRECATED: Use /accept/ instead.
+        Guard acknowledges the alert and will respond.
+        """
+        # Redirect to new accept endpoint behavior
+        return self.accept(request, pk)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def decline(self, request, pk=None):

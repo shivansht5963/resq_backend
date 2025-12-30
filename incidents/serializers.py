@@ -199,6 +199,129 @@ class IncidentCreateSerializer(serializers.Serializer):
         fields = ('beacon_id', 'description')
 
 
+class IncidentStatusUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for student polling incident status.
+    
+    Shows:
+    - Incident details
+    - Guard assignment status (waiting/assigned)
+    - Guard information (when assigned)
+    - Alert status details
+    - Timeline of updates
+    """
+    
+    beacon = BeaconSerializer(read_only=True)
+    signal_count = serializers.SerializerMethodField()
+    guard_status = serializers.SerializerMethodField()
+    guard_assignment = serializers.SerializerMethodField()
+    alert_status_summary = serializers.SerializerMethodField()
+    pending_alerts = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Incident
+        fields = (
+            'id', 'beacon', 'status', 'priority', 'description', 'report_type', 'location',
+            'signal_count',
+            'guard_status',  # NEW: "WAITING_FOR_GUARD" or "GUARD_ASSIGNED"
+            'guard_assignment',  # NEW: Guard details when assigned
+            'alert_status_summary',  # NEW: Summary of alert statuses
+            'pending_alerts',  # NEW: Pending alerts to guards
+            'first_signal_time', 'last_signal_time',
+            'created_at', 'updated_at'
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at', 'first_signal_time', 'last_signal_time')
+    
+    def get_signal_count(self, obj):
+        """Count of signals for this incident."""
+        return obj.signals.count()
+    
+    def get_guard_status(self, obj):
+        """
+        Return guard assignment status.
+        
+        Returns:
+        - "WAITING_FOR_GUARD" if incident has SENT/DECLINED alerts
+        - "GUARD_ASSIGNED" if active assignment exists
+        - "NO_ASSIGNMENT" if all alerts expired/declined
+        """
+        # Check if has active assignment
+        try:
+            assignment = obj.guard_assignments.get(is_active=True)
+            return {
+                'status': 'GUARD_ASSIGNED',
+                'message': 'Guard has been assigned to your incident',
+                'assigned_at': assignment.assigned_at
+            }
+        except GuardAssignment.DoesNotExist:
+            pass
+        
+        # Check if alerts are still pending
+        pending_alerts = obj.guard_alerts.filter(
+            status__in=['SENT', 'ACCEPTED']
+        ).count()
+        
+        if pending_alerts > 0:
+            return {
+                'status': 'WAITING_FOR_GUARD',
+                'message': f'Searching for available guard... ({pending_alerts} being contacted)',
+                'pending_alerts': pending_alerts
+            }
+        
+        return {
+            'status': 'NO_ASSIGNMENT',
+            'message': 'No guard available at this time. Admin has been notified.',
+            'pending_alerts': 0
+        }
+    
+    def get_guard_assignment(self, obj):
+        """Get active guard assignment details."""
+        try:
+            assignment = obj.guard_assignments.get(is_active=True)
+            return {
+                'id': assignment.id,
+                'guard': {
+                    'id': str(assignment.guard.id),
+                    'full_name': assignment.guard.full_name,
+                    'email': assignment.guard.email
+                },
+                'assigned_at': assignment.assigned_at,
+                'status': 'ACTIVE'
+            }
+        except GuardAssignment.DoesNotExist:
+            return None
+    
+    def get_alert_status_summary(self, obj):
+        """Summary of alert statuses."""
+        alerts = obj.guard_alerts.all()
+        return {
+            'total_alerts': alerts.count(),
+            'sent': alerts.filter(status='SENT').count(),
+            'accepted': alerts.filter(status='ACCEPTED').count(),
+            'declined': alerts.filter(status='DECLINED').count(),
+            'expired': alerts.filter(status='EXPIRED').count()
+        }
+    
+    def get_pending_alerts(self, obj):
+        """List of pending (SENT) alerts with guard info."""
+        pending = obj.guard_alerts.filter(status='SENT').order_by('priority_rank')
+        return [
+            {
+                'id': alert.id,
+                'guard': {
+                    'id': str(alert.guard.id),
+                    'full_name': alert.guard.full_name
+                },
+                'priority_rank': alert.priority_rank,
+                'alert_type': alert.alert_type,
+                'requires_response': alert.requires_response,
+                'alert_sent_at': alert.alert_sent_at,
+                'response_deadline': alert.response_deadline
+            }
+            for alert in pending
+        ]
+
+
 class IncidentReportSerializer(serializers.Serializer):
     """Serializer for creating non-emergency incidents via student report."""
 

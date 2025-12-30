@@ -107,13 +107,23 @@ class DeviceToken(models.Model):
 
 
 class GuardAlert(models.Model):
-    """Alert sent to nearest guards when incident is created."""
+    """
+    Alert sent to guards when incident is created.
+    
+    Two types:
+    1. ASSIGNMENT: Action required (specific guards must accept/reject)
+    2. BROADCAST: Awareness only (sent to all, read-only)
+    """
     
     class AlertStatus(models.TextChoices):
         SENT = "SENT", "Sent"
-        ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged"
+        ACCEPTED = "ACCEPTED", "Accepted (Official Response)"
         DECLINED = "DECLINED", "Declined"
-        EXPIRED = "EXPIRED", "Expired"
+        EXPIRED = "EXPIRED", "Expired (No Response / Timeout)"
+    
+    class AlertType(models.TextChoices):
+        ASSIGNMENT = "ASSIGNMENT", "Assignment Required"
+        BROADCAST = "BROADCAST", "Broadcast Only"
     
     id = models.AutoField(primary_key=True)
     incident = models.ForeignKey(
@@ -132,9 +142,25 @@ class GuardAlert(models.Model):
         null=True,
         blank=True,
         related_name="alert",
-        help_text="Assignment created when this alert was acknowledged"
+        help_text="Assignment created when guard accepts (ASSIGNMENT type only)"
     )
     distance_km = models.FloatField(null=True, blank=True, help_text="Distance from guard to incident")
+    
+    # NEW: Alert type (ASSIGNMENT or BROADCAST)
+    alert_type = models.CharField(
+        max_length=20,
+        choices=AlertType.choices,
+        default=AlertType.ASSIGNMENT,
+        db_index=True,
+        help_text="ASSIGNMENT: requires response, BROADCAST: awareness only"
+    )
+    
+    # NEW: Whether guard response is required
+    requires_response = models.BooleanField(
+        default=True,
+        help_text="True = guard must accept/reject, False = read-only notification"
+    )
+    
     status = models.CharField(
         max_length=20,
         choices=AlertStatus.choices,
@@ -143,14 +169,20 @@ class GuardAlert(models.Model):
     )
     priority_rank = models.IntegerField(null=True, help_text="1=nearest, 2=second nearest, etc")
     alert_sent_at = models.DateTimeField(auto_now_add=True)
+    response_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Deadline for guard response (auto-escalate after this)"
+    )
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         ordering = ["priority_rank", "-alert_sent_at"]
         indexes = [
-            models.Index(fields=["incident", "status"]),
+            models.Index(fields=["incident", "alert_type", "status"]),
             models.Index(fields=["guard", "status"]),
             models.Index(fields=["incident", "guard", "-alert_sent_at"]),
+            models.Index(fields=["requires_response", "status"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -160,4 +192,4 @@ class GuardAlert(models.Model):
         ]
     
     def __str__(self):
-        return f"Alert: Guard {self.guard.full_name} → Incident {str(self.incident.id)[:8]} ({self.status})"
+        return f"Alert[{self.alert_type}]: Guard {self.guard.full_name} → Incident {str(self.incident.id)[:8]} ({self.status})"
