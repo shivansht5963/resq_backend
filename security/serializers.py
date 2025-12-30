@@ -116,11 +116,15 @@ class GuardAlertDetailSerializer(serializers.ModelSerializer):
 
 
 class GuardLocationUpdateSerializer(serializers.Serializer):
-    """Serializer for guard location update endpoint."""
+    """Serializer for guard location update endpoint.
     
-    nearest_beacon_id = serializers.UUIDField(
+    Uses IDENTICAL logic as student SOS report - get_or_create_incident_with_signals.
+    Validates beacon exists, doesn't strictly require is_active (for flexibility).
+    """
+    
+    nearest_beacon_id = serializers.CharField(
         required=True,
-        help_text="UUID of the nearest beacon (from mobile detection)"
+        help_text="Hardware beacon ID detected by mobile app (e.g., safe:uuid:403:403 or ab907856-3412-3412-3412-341278563412)"
     )
     timestamp = serializers.DateTimeField(
         required=False,
@@ -129,10 +133,37 @@ class GuardLocationUpdateSerializer(serializers.Serializer):
     )
     
     def validate_nearest_beacon_id(self, value):
-        """Validate that beacon exists and is active."""
+        """Validate that beacon exists.
+        
+        Uses SAME LOGIC as get_or_create_incident_with_signals():
+        - Supports virtual beacons (location:*)
+        - Looks up by beacon_id field (hardware identifier)
+        - Returns the Beacon object for use in view
+        """
         from incidents.models import Beacon
+        
+        # Support virtual beacons same as SOS endpoint
+        if value.startswith('location:'):
+            beacon, _ = Beacon.objects.get_or_create(
+                beacon_id=value,
+                defaults={
+                    'uuid': value,
+                    'major': 0,
+                    'minor': 0,
+                    'location_name': value.replace('location:', '').replace('_', ' ').title(),
+                    'building': 'Virtual Location',
+                    'floor': 0,
+                    'is_active': True
+                }
+            )
+            return beacon
+        
         try:
-            beacon = Beacon.objects.get(id=value, is_active=True)
+            # Real hardware beacon - lookup by beacon_id, allow inactive beacons like SOS does
+            beacon = Beacon.objects.get(beacon_id=value)
             return beacon
         except Beacon.DoesNotExist:
-            raise serializers.ValidationError(f"Beacon {value} not found or inactive")
+            raise serializers.ValidationError(
+                f"Beacon '{value}' not found. "
+                f"Use the hardware beacon ID detected by BLE scanner (e.g., 'safe:uuid:403:403')."
+            )

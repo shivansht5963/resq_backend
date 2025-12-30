@@ -167,7 +167,7 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 {
-  "beacon_id": "safe:uuid:401:401",
+  "beacon_id": "safe:uuid:403:403",
   "description": "Emergency at test location"
 }
 
@@ -320,8 +320,16 @@ Content-Type: application/json
 Authorization: Token {{studentToken}}
 
 ###############################################
-### 3. GUARD ENDPOINTS
+### GUARD ENDPOINTS
 ###############################################
+
+### ⚠️ IMPORTANT: Update Location Uses Real Beacon Validation
+### The /guards/update_location/ endpoint validates that:
+### 1. nearest_beacon_id is a valid UUID from Beacon table
+### 2. The beacon is_active = True in the database
+### 3. Returns 400 BAD REQUEST if beacon not found
+###
+### Use the REAL beacon UUIDs listed in test data below ✓
 
 ### 3.0 CRITICAL: First GET ALERTS TO SEE WHAT EXISTS
 ### Run this BEFORE trying alert detail/acknowledge/decline
@@ -331,12 +339,33 @@ Authorization: Token {{guardToken}}
 ### Copy the "id" from response above and update @alertId at top
 
 ### 3.1 Update Guard Location (Critical - Every 10-15 sec)
+### USES SAME FORMAT as student SOS! (beacon_id hardware identifier)
 POST {{baseUrl}}/guards/update_location/
 Content-Type: application/json
 Authorization: Token {{guardToken}}
 
 {
-  "nearest_beacon_id": "529e317a-5c76-468b-a764-3daf050e19dd",
+  "nearest_beacon_id": "ab907856-3412-3412-3412-341278563412",
+  "timestamp": "2025-12-25T10:30:15Z"
+}
+
+### 3.1b Update Guard Location (Library 3F - safe:uuid:403:403)
+POST {{baseUrl}}/guards/update_location/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "nearest_beacon_id": "safe:uuid:403:403",
+  "timestamp": "2025-12-25T10:30:15Z"
+}
+
+### 3.1c Update Guard Location (Hallway 4F - test:uuid:2:2)
+POST {{baseUrl}}/guards/update_location/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "nearest_beacon_id": "test:uuid:2:2",
   "timestamp": "2025-12-25T10:30:15Z"
 }
 
@@ -539,19 +568,20 @@ Authorization: Token {{guardToken}}
 ### password: admin123
 ### role: ADMIN
 
-### Sample Beacon IDs (From API - VERIFIED WORKING ONLY)
-### DO NOT USE beacons with beacon_id: null - they will fail validation!
-### 
-### WORKING Beacon IDs (pass backend validation):
-### "safe:uuid:403:403"              (Library 3F - VERIFIED ACTIVE ✓)
-### "test:uuid:2:2"                  (Hallway 4F - VERIFIED ACTIVE ✓)
-### "safe:uuid:402:402"              (Hallway 4F duplicate - VERIFIED ACTIVE ✓)
-### "safe:uuid:401:401"              (Library 4F - VERIFIED ACTIVE ✓)
+### Sample Beacon IDs (Hardware beacon_id Format - SAME AS STUDENT SOS)
+### Uses beacon_id field (hardware identifier detected by BLE scanner)
+### Backend validates: Beacon.objects.get(beacon_id=value, is_active=True)
 ###
-### NOT WORKING / UNRELIABLE:
-### "550e8400-e29b-41d4-a716-446655441111" (shivansh home - returns 400 ✗)
-### "550e8400-e29b-41d4-a716-446655441100" (shivansh x test - NULL beacon_id ✗)
-### "550e8400-e29b-41d4-a716-446655440000" (Test Lab - NULL beacon_id ✗)
+### WORKING Beacon IDs (✓ All Validated Active):
+### "safe:uuid:401:401"                     (Library 4F - Main Floor 4 ✓)
+### "safe:uuid:403:403"                     (Library 3F - Main Floor 3 ✓)
+### "safe:uuid:402:402"                     (Hallway 4F - Main Floor 4 ✓)
+### "test:uuid:2:2"                         (Hallway 4F alternate ✓)
+### "test:uuid:3:3"                         (Test Lab - Science Center ✓)
+### "ab907856-3412-3412-3412-341278563412"  (Shivansh Actual Beacon ✓)
+###
+### KEY: Use hardware beacon_id (BLE scanner format), NOT database UUID!
+### Same logic as: POST /api/incidents/report_sos/ with beacon_id
 
 ###############################################
 ### WORKFLOW EXAMPLE
