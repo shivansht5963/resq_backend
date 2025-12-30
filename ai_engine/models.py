@@ -37,5 +37,6 @@ class AIEvent(models.Model):
         ]
 
     def __str__(self):
-        return f"AIEvent ({self.get_event_type_display()}) at {self.beacon.location_name} - conf={self.confidence_score:.2f}"
+        beacon_name = self.beacon.location_name if self.beacon else "No Location"
+        return f"AIEvent ({self.get_event_type_display()}) at {beacon_name} - conf={self.confidence_score:.2f}"
 

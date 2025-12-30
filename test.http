@@ -48,18 +48,18 @@ Authorization: Token {{studentToken}}
 ###############################################
 
 ### 0.5a Violence Detection (CRITICAL incident, 75% confidence threshold)
-POST {{baseUrl}}/ai/violence-detected/
+POST {{baseUrl}}/violence-detected/
 Content-Type: application/json
 
 {
-  "beacon_id": "safe:uuid:403:403",
+  "beacon_id": "ab907856-3412-3412-3412-341278563412",
   "confidence_score": 0.92,
   "description": "Fight detected between 2 people near library entrance",
   "device_id": "AI-VISION-001"
 }
 
 ### 0.5b Scream Detection (HIGH incident, 80% confidence threshold)
-POST {{baseUrl}}/ai/scream-detected/
+POST {{baseUrl}}/scream-detected/
 Content-Type: application/json
 
 {
@@ -70,7 +70,7 @@ Content-Type: application/json
 }
 
 ### 0.5c Violence Detection (Below Threshold - should return "logged_only")
-POST {{baseUrl}}/ai/violence-detected/
+POST {{baseUrl}}/violence-detected/
 Content-Type: application/json
 
 {
@@ -80,7 +80,7 @@ Content-Type: application/json
 }
 
 ### 0.5d Scream Detection (Below Threshold)
-POST {{baseUrl}}/ai/scream-detected/
+POST {{baseUrl}}/scream-detected/
 Content-Type: application/json
 
 {
