@@ -6,7 +6,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
-from .models import Beacon, Incident, IncidentSignal, ESP32Device, IncidentImage
+from .models import Beacon, Incident, IncidentSignal, PhysicalDevice, IncidentImage
 from .serializers import (
     BeaconSerializer,
     IncidentDetailedSerializer,
@@ -360,8 +360,8 @@ def panic_button_endpoint(request):
         )
     
     try:
-        esp_device = ESP32Device.objects.get(device_id=device_id, is_active=True)
-    except ESP32Device.DoesNotExist:
+        esp_device = PhysicalDevice.objects.get(device_id=device_id, is_active=True)
+    except PhysicalDevice.DoesNotExist:
         return Response(
             {'error': f'Device {device_id} not found or inactive'},
             status=status.HTTP_404_NOT_FOUND
@@ -378,7 +378,10 @@ def panic_button_endpoint(request):
             beacon_id=esp_device.beacon.id,
             signal_type=IncidentSignal.SignalType.PANIC_BUTTON,
             source_device_id=esp_device.id,
-            details={'device_id': device_id}
+            details={
+                'device_id': device_id,
+                'device_type': esp_device.get_device_type_display()
+            }
         )
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

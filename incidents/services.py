@@ -157,13 +157,17 @@ def escalate_priority(current, new_signal_type):
     
     Rules:
     - PANIC_BUTTON → always CRITICAL
-    - AI_AUDIO → at least HIGH
-    - AI_VISION → at least MEDIUM
+    - VIOLENCE_DETECTED → CRITICAL
+    - SCREAM_DETECTED → HIGH
+    - AI_AUDIO (legacy) → HIGH
+    - AI_VISION (legacy) → MEDIUM
     - STUDENT_SOS → MEDIUM
     """
     
     priority_map = {
         IncidentSignal.SignalType.PANIC_BUTTON: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.SCREAM_DETECTED: Incident.Priority.HIGH,
         IncidentSignal.SignalType.AI_AUDIO: Incident.Priority.HIGH,
         IncidentSignal.SignalType.AI_VISION: Incident.Priority.MEDIUM,
         IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.MEDIUM
@@ -178,6 +182,8 @@ def get_initial_priority(signal_type):
     
     priority_map = {
         IncidentSignal.SignalType.PANIC_BUTTON: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.SCREAM_DETECTED: Incident.Priority.HIGH,
         IncidentSignal.SignalType.AI_AUDIO: Incident.Priority.HIGH,
         IncidentSignal.SignalType.AI_VISION: Incident.Priority.MEDIUM,
         IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.MEDIUM

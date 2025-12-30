@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Beacon, Incident, IncidentSignal, ESP32Device, IncidentImage
+from .models import Beacon, Incident, IncidentSignal, PhysicalDevice, IncidentImage
 from security.models import GuardAssignment, GuardAlert
 from chat.models import Conversation, Message
 
@@ -34,14 +34,14 @@ class BeaconSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
 
 
-class ESP32DeviceSerializer(serializers.ModelSerializer):
-    """Serializer for ESP32Device."""
+class PhysicalDeviceSerializer(serializers.ModelSerializer):
+    """Serializer for PhysicalDevice."""
 
     beacon = BeaconSerializer(read_only=True)
 
     class Meta:
-        model = ESP32Device
-        fields = ('id', 'device_id', 'beacon', 'name', 'is_active')
+        model = PhysicalDevice
+        fields = ('id', 'device_id', 'device_type', 'beacon', 'name', 'is_active')
         read_only_fields = ('id',)
 
 
@@ -49,7 +49,7 @@ class IncidentSignalSerializer(serializers.ModelSerializer):
     """Serializer for IncidentSignal - individual triggers."""
 
     source_user = serializers.SerializerMethodField()
-    source_device = ESP32DeviceSerializer(read_only=True)
+    source_device = PhysicalDeviceSerializer(read_only=True)
     
     class Meta:
         model = IncidentSignal

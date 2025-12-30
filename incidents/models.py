@@ -194,8 +194,8 @@ class IncidentSignal(models.Model):
     class SignalType(models.TextChoices):
         STUDENT_SOS = "STUDENT_SOS", "Student SOS Report"
         STUDENT_REPORT = "STUDENT_REPORT", "Student General Report"
-        AI_VISION = "AI_VISION", "AI Vision Detection"
-        AI_AUDIO = "AI_AUDIO", "AI Audio Detection"
+        VIOLENCE_DETECTED = "VIOLENCE_DETECTED", "Violence Detected"
+        SCREAM_DETECTED = "SCREAM_DETECTED", "Scream Detected"
         PANIC_BUTTON = "PANIC_BUTTON", "Panic Button (ESP32)"
     
     id = models.AutoField(primary_key=True)
@@ -218,12 +218,12 @@ class IncidentSignal(models.Model):
         help_text="User who triggered signal (SOS)"
     )
     source_device = models.ForeignKey(
-        'ESP32Device',
+        'PhysicalDevice',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="incident_signals",
-        help_text="ESP32 device that triggered signal"
+        help_text="Physical device that triggered signal"
     )
     ai_event = models.ForeignKey(
         'ai_engine.AIEvent',
@@ -248,16 +248,28 @@ class IncidentSignal(models.Model):
         return f"Signal {self.id} ({self.get_signal_type_display()}) → Incident {str(self.incident.id)[:8]}"
 
 
-class ESP32Device(models.Model):
-    """ESP32 panic button devices with fixed locations."""
+class PhysicalDevice(models.Model):
+    """Physical devices (panic buttons, AI detectors) with fixed locations."""
+
+    class DeviceType(models.TextChoices):
+        PANIC_BUTTON = "PANIC_BUTTON", "Panic Button"
+        AI_VISION = "AI_VISION", "AI Vision Detection"
+        AI_AUDIO = "AI_AUDIO", "AI Audio Detection"
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    device_id = models.CharField(max_length=100, unique=True, db_index=True, help_text="ESP32 device identifier")
+    device_id = models.CharField(max_length=100, unique=True, db_index=True, help_text="Device identifier (e.g., ESP32-001, AI-VISION-01)")
+    device_type = models.CharField(
+        max_length=50,
+        choices=DeviceType.choices,
+        default=DeviceType.PANIC_BUTTON,
+        db_index=True,
+        help_text="Type of device: Panic button, AI vision, or AI audio"
+    )
     beacon = models.ForeignKey(
         Beacon,
         on_delete=models.PROTECT,
-        related_name="esp32_devices",
-        help_text="Location of this panic button"
+        related_name="physical_devices",
+        help_text="Location where this device is situated"
     )
     name = models.CharField(max_length=255, blank=True, help_text="Device location name (e.g., Library Entrance)")
     is_active = models.BooleanField(default=True, db_index=True)
@@ -268,9 +280,10 @@ class ESP32Device(models.Model):
         ordering = ["device_id"]
         indexes = [
             models.Index(fields=["device_id"]),
+            models.Index(fields=["device_type"]),
             models.Index(fields=["beacon"]),
             models.Index(fields=["is_active"]),
         ]
     
     def __str__(self):
-        return f"{self.device_id} ({self.beacon.location_name})"
+        return f"{self.device_id} ({self.get_device_type_display()}) - {self.beacon.location_name}"

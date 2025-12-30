@@ -44,6 +44,64 @@ OPTIONS {{baseUrl}}/incidents/
 Authorization: Token {{studentToken}}
 
 ###############################################
+### 0.5 AI DETECTION ENDPOINTS (NEW)
+###############################################
+
+### 0.5a Violence Detection (CRITICAL incident, 75% confidence threshold)
+POST {{baseUrl}}/ai/violence-detected/
+Content-Type: application/json
+
+{
+  "beacon_id": "safe:uuid:403:403",
+  "confidence_score": 0.92,
+  "description": "Fight detected between 2 people near library entrance",
+  "device_id": "AI-VISION-001"
+}
+
+### 0.5b Scream Detection (HIGH incident, 80% confidence threshold)
+POST {{baseUrl}}/ai/scream-detected/
+Content-Type: application/json
+
+{
+  "beacon_id": "safe:uuid:402:402",
+  "confidence_score": 0.88,
+  "description": "Loud screaming detected in dormitory hallway",
+  "device_id": "AI-AUDIO-002"
+}
+
+### 0.5c Violence Detection (Below Threshold - should return "logged_only")
+POST {{baseUrl}}/ai/violence-detected/
+Content-Type: application/json
+
+{
+  "beacon_id": "safe:uuid:401:401",
+  "confidence_score": 0.65,
+  "description": "Possible fight (low confidence)"
+}
+
+### 0.5d Scream Detection (Below Threshold)
+POST {{baseUrl}}/ai/scream-detected/
+Content-Type: application/json
+
+{
+  "beacon_id": "safe:uuid:403:403",
+  "confidence_score": 0.72,
+  "description": "Possible scream (low confidence)"
+}
+
+### 0.5e Legacy AI Detection (Backward Compatible)
+POST {{baseUrl}}/ai-detection/
+Content-Type: application/json
+
+{
+  "beacon_id": "safe:uuid:403:403",
+  "event_type": "VIOLENCE",
+  "confidence_score": 0.85,
+  "description": "Legacy endpoint test",
+  "device_id": "AI-LEGACY-001"
+}
+
+###############################################
 ### 1. AUTHENTICATION ENDPOINTS
 ###############################################
 

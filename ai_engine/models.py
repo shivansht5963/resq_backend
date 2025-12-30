@@ -5,8 +5,8 @@ class AIEvent(models.Model):
     """AI detection event (Vision or Audio). Logs detection, optionally triggers incident."""
 
     class EventType(models.TextChoices):
-        VISION = "VISION", "Vision Detection"
-        AUDIO = "AUDIO", "Audio Detection"
+        VIOLENCE = "VIOLENCE", "Violence Detected"
+        SCREAM = "SCREAM", "Scream Detected"
 
     id = models.AutoField(primary_key=True)
     beacon = models.ForeignKey(

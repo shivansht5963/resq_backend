@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Beacon, BeaconProximity, ESP32Device, Incident, IncidentSignal, IncidentImage
+from django import forms
+from .models import Beacon, BeaconProximity, PhysicalDevice, Incident, IncidentSignal, IncidentImage
 
 
 class BeaconProximityInline(admin.TabularInline):
@@ -31,11 +32,44 @@ class IncidentImageInline(admin.StackedInline):
     image_preview.short_description = 'Preview'
 
 
+class IncidentSignalInlineForm(forms.ModelForm):
+    """Custom form for IncidentSignal inline that allows entering description as text."""
+    
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2}),
+        help_text='Optional description for this signal'
+    )
+    
+    class Meta:
+        model = IncidentSignal
+        fields = ('signal_type', 'source_user', 'source_device', 'ai_event', 'description')
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            # For existing signals, show description from details
+            self.fields['description'].initial = self.instance.details.get('description', '')
+            self.fields['description'].widget.attrs['readonly'] = True
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        # Store description in details JSON
+        if not instance.details:
+            instance.details = {}
+        if self.cleaned_data.get('description'):
+            instance.details['description'] = self.cleaned_data['description']
+        if commit:
+            instance.save()
+        return instance
+
+
 class IncidentSignalInline(admin.TabularInline):
     """Inline admin for displaying signals related to an incident."""
     model = IncidentSignal
-    extra = 0
-    fields = ('signal_type', 'source_user', 'source_device', 'ai_event', 'created_at')
+    form = IncidentSignalInlineForm
+    extra = 1
+    fields = ('signal_type', 'source_user', 'source_device', 'ai_event', 'description', 'created_at')
     readonly_fields = ('created_at',)
 
 
@@ -56,15 +90,15 @@ class BeaconAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ESP32Device)
-class ESP32DeviceAdmin(admin.ModelAdmin):
-    list_display = ('device_id', 'name', 'beacon', 'is_active', 'created_at')
-    list_filter = ('is_active', 'beacon__building', 'created_at')
+@admin.register(PhysicalDevice)
+class PhysicalDeviceAdmin(admin.ModelAdmin):
+    list_display = ('device_id', 'device_type', 'name', 'beacon', 'is_active', 'created_at')
+    list_filter = ('device_type', 'is_active', 'beacon__building', 'created_at')
     search_fields = ('device_id', 'name', 'beacon__location_name')
     ordering = ('device_id',)
     readonly_fields = ('id', 'created_at', 'updated_at')
     fieldsets = (
-        ('Device Info', {'fields': ('device_id', 'name')}),
+        ('Device Info', {'fields': ('device_id', 'device_type', 'name')}),
         ('Location', {'fields': ('beacon',)}),
         ('Status', {'fields': ('is_active',)}),
         ('Timestamps', {'fields': ('id', 'created_at', 'updated_at')}),
@@ -130,9 +164,9 @@ class BeaconProximityAdmin(admin.ModelAdmin):
 
 @admin.register(IncidentSignal)
 class IncidentSignalAdmin(admin.ModelAdmin):
-    list_display = ('id', 'incident', 'signal_type', 'source_user', 'source_device', 'created_at')
+    list_display = ('id', 'incident', 'signal_type', 'source_user', 'source_device', 'get_description', 'created_at')
     list_filter = ('signal_type', 'created_at', 'incident__beacon__building')
-    search_fields = ('incident__id', 'source_user__full_name', 'source_device__device_id')
+    search_fields = ('incident__id', 'source_user__full_name', 'source_device__device_id', 'details__description')
     ordering = ('-created_at',)
     readonly_fields = ('id', 'created_at', 'updated_at')
     fieldsets = (
@@ -141,6 +175,14 @@ class IncidentSignalAdmin(admin.ModelAdmin):
         ('Sources', {'fields': ('source_user', 'source_device', 'ai_event')}),
         ('Timestamps', {'fields': ('id', 'created_at', 'updated_at')}),
     )
+    
+    def get_description(self, obj):
+        """Extract description from details JSON for list view."""
+        description = obj.details.get('description', '')
+        if description:
+            return description[:50] + '...' if len(description) > 50 else description
+        return '—'
+    get_description.short_description = 'Description'
 
 
 @admin.register(IncidentImage)
