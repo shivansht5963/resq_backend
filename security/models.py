@@ -77,35 +77,6 @@ class GuardAssignment(models.Model):
         return f"{self.guard.full_name} → Incident {str(self.incident.id)[:8]} (active={self.is_active})"
 
 
-class DeviceToken(models.Model):
-    """FCM device tokens for push notifications."""
-
-    class Platform(models.TextChoices):
-        ANDROID = "ANDROID", "Android"
-        IOS = "IOS", "iOS"
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="device_tokens"
-    )
-    token = models.TextField(unique=True, db_index=True)
-    platform = models.CharField(max_length=20, choices=Platform.choices)
-    is_active = models.BooleanField(default=True, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["user", "is_active"]),
-            models.Index(fields=["platform"]),
-        ]
-
-    def __str__(self):
-        return f"{self.user.email} - {self.platform}"
-
-
 class GuardAlert(models.Model):
     """
     Alert sent to guards when incident is created.

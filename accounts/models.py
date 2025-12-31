@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.utils import timezone
+from django.conf import settings
 
 
 class CustomUserManager(BaseUserManager):
@@ -54,3 +55,42 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.full_name} ({self.email})"
+
+class Device(models.Model):
+    """Mobile device registration for push notifications."""
+
+    class Platform(models.TextChoices):
+        ANDROID = "android", "Android"
+        IOS = "ios", "iOS"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="devices"
+    )
+    token = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text="Expo Push Token"
+    )
+    platform = models.CharField(
+        max_length=20,
+        choices=Platform.choices,
+        default=Platform.ANDROID
+    )
+    is_active = models.BooleanField(default=True, db_index=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "accounts_device"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["token"]),
+            models.Index(fields=["platform"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.platform} ({self.token[:20]}...)"

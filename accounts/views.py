@@ -5,7 +5,13 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
-from .serializers import LoginSerializer
+from .serializers import (
+    LoginSerializer, 
+    DeviceSerializer, 
+    DeviceRegisterSerializer, 
+    DeviceUnregisterSerializer
+)
+from .models import Device
 
 
 @api_view(['POST'])
@@ -56,9 +62,128 @@ def logout(request):
         return Response({'detail': 'Logged out successfully.'}, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({'detail': f'Logout failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def register_device(request):
+    """
+    Register a mobile device for push notifications.
     
-    try:
-        request.user.auth_token.delete()
-        return Response({'detail': 'Logged out successfully.'}, status=status.HTTP_200_OK)
-    except:
-        return Response({'detail': 'Logout failed.'}, status=status.HTTP_400_BAD_REQUEST)
+    Requires: Token authentication in header
+    Authorization: Token <token_key>
+    
+    Request:
+        {
+            "token": "ExponentPushToken[abc123...]",
+            "platform": "android"
+        }
+    
+    Response:
+        {
+            "id": 1,
+            "token": "ExponentPushToken[abc123...]",
+            "platform": "android",
+            "is_active": true,
+            "last_seen_at": "2025-01-01T10:00:00Z",
+            "created_at": "2025-01-01T10:00:00Z"
+        }
+    """
+    serializer = DeviceRegisterSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        token = serializer.validated_data['token']
+        platform = serializer.validated_data['platform']
+        
+        # Create or update device
+        device, created = Device.objects.update_or_create(
+            token=token,
+            defaults={
+                'user': request.user,
+                'platform': platform,
+                'is_active': True,
+            }
+        )
+        
+        # If device existed but was inactive, reactivate it
+        if not created and not device.is_active:
+            device.is_active = True
+            device.save()
+        
+        device_serializer = DeviceSerializer(device)
+        return Response(
+            device_serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def unregister_device(request):
+    """
+    Unregister a mobile device (mark as inactive).
+    
+    Requires: Token authentication in header
+    Authorization: Token <token_key>
+    
+    Request:
+        {
+            "token": "ExponentPushToken[abc123...]"
+        }
+    
+    Response:
+        {
+            "detail": "Device unregistered successfully."
+        }
+    """
+    serializer = DeviceUnregisterSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        token = serializer.validated_data['token']
+        
+        try:
+            device = Device.objects.get(token=token, user=request.user)
+            device.is_active = False
+            device.save()
+            return Response(
+                {'detail': 'Device unregistered successfully.'},
+                status=status.HTTP_200_OK
+            )
+        except Device.DoesNotExist:
+            return Response(
+                {'detail': 'Device not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def list_devices(request):
+    """
+    List all registered devices for the current user.
+    
+    Requires: Token authentication in header
+    Authorization: Token <token_key>
+    
+    Response:
+        [
+            {
+                "id": 1,
+                "token": "ExponentPushToken[abc123...]",
+                "platform": "android",
+                "is_active": true,
+                "last_seen_at": "2025-01-01T10:00:00Z",
+                "created_at": "2025-01-01T10:00:00Z"
+            }
+        ]
+    """
+    devices = Device.objects.filter(user=request.user).order_by('-created_at')
+    serializer = DeviceSerializer(devices, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

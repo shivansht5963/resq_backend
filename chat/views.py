@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from django.db.models import Q
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer, MessageListSerializer
+from accounts.push_notifications import PushNotificationService
 
 
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -63,6 +64,15 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             content=content
         )
         
+        # Send push notifications to other participants
+        try:
+            notify_new_message(message, conversation)
+        except Exception as e:
+            # Log but don't fail the request if notifications fail
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send chat notification: {e}")
+        
         return Response(
             MessageSerializer(message).data,
             status=status.HTTP_201_CREATED
@@ -87,3 +97,48 @@ class MessageViewSet(viewsets.ReadOnlyModelViewSet):
         ) | Message.objects.filter(
             conversation__incident__guard_assignments__guard__user=user
         )
+
+def notify_new_message(message, conversation):
+    """
+    Send push notifications to conversation participants when a new message arrives.
+    
+    Args:
+        message: Message instance
+        conversation: Conversation instance
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Get the incident related to this conversation
+    incident = conversation.incident
+    
+    # Find all participants except the sender
+    participants = set()
+    
+    # Add student (if not sender)
+    if incident.student and incident.student != message.sender:
+        participants.add(incident.student)
+    
+    # Add all guards assigned to incident (if not sender)
+    for assignment in incident.guard_assignments.all():
+        if assignment.guard.user != message.sender:
+            participants.add(assignment.guard.user)
+    
+    # Send notifications to each participant
+    for participant in participants:
+        try:
+            tokens = PushNotificationService.get_guard_tokens(participant)
+            if tokens:
+                # Truncate message for preview
+                message_preview = message.content[:100]
+                
+                PushNotificationService.notify_new_chat_message(
+                    expo_tokens=tokens,
+                    incident_id=str(incident.id),
+                    conversation_id=conversation.id,
+                    sender_name=message.sender.full_name,
+                    message_preview=message_preview
+                )
+                logger.info(f"Sent chat notification to {participant.email} for incident {incident.id}")
+        except Exception as e:
+            logger.error(f"Failed to send chat notification to {participant.email}: {e}")

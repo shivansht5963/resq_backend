@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import GuardProfile, GuardAssignment, DeviceToken, GuardAlert
+from .models import GuardProfile, GuardAssignment, GuardAlert
 
 
 class GuardProfileSerializer(serializers.ModelSerializer):
@@ -55,22 +55,6 @@ class GuardAssignmentSerializer(serializers.ModelSerializer):
         model = GuardAssignment
         fields = ('id', 'guard', 'guard_id', 'incident', 'incident_id', 'is_active', 'assigned_at', 'updated_at')
         read_only_fields = ('id', 'assigned_at', 'updated_at')
-
-
-class DeviceTokenSerializer(serializers.ModelSerializer):
-    """Serializer for DeviceToken model."""
-
-    user = serializers.StringRelatedField(read_only=True)
-    user_id = serializers.PrimaryKeyRelatedField(
-        queryset=__import__('accounts.models', fromlist=['User']).User.objects.all(),
-        source='user',
-        write_only=True
-    )
-
-    class Meta:
-        model = DeviceToken
-        fields = ('id', 'user', 'user_id', 'token', 'platform', 'is_active', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'created_at', 'updated_at')
 
 
 class GuardAlertSerializer(serializers.ModelSerializer):

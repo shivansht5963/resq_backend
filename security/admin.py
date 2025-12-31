@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import GuardProfile, GuardAssignment, DeviceToken, GuardAlert
+from .models import GuardProfile, GuardAssignment, GuardAlert
 
 
 @admin.register(GuardProfile)
@@ -49,16 +49,3 @@ class GuardAlertAdmin(admin.ModelAdmin):
         ('Timestamps', {'fields': ('alert_sent_at', 'updated_at')}),
     )
 
-
-@admin.register(DeviceToken)
-class DeviceTokenAdmin(admin.ModelAdmin):
-    list_display = ('user', 'platform', 'is_active', 'created_at')
-    list_filter = ('platform', 'is_active', 'created_at')
-    search_fields = ('user__email', 'token')
-    ordering = ('-created_at',)
-    readonly_fields = ('id', 'created_at', 'updated_at', 'token')
-    fieldsets = (
-        ('Device Info', {'fields': ('user', 'token', 'platform')}),
-        ('Status', {'fields': ('is_active',)}),
-        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
-    )

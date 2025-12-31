@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import User
+from .models import User, Device
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -76,3 +76,42 @@ class LoginSerializer(serializers.Serializer):
 
         data['user'] = user
         return data
+
+class DeviceSerializer(serializers.ModelSerializer):
+    """Serializer for device registration and management."""
+
+    class Meta:
+        model = Device
+        fields = ('id', 'token', 'platform', 'is_active', 'last_seen_at', 'created_at')
+        read_only_fields = ('id', 'last_seen_at', 'created_at')
+
+
+class DeviceRegisterSerializer(serializers.Serializer):
+    """Serializer for device registration endpoint."""
+
+    token = serializers.CharField(
+        max_length=255,
+        help_text="Expo push token"
+    )
+    platform = serializers.ChoiceField(
+        choices=['android', 'ios'],
+        default='android',
+        help_text="Mobile platform"
+    )
+
+    def validate_token(self, value):
+        """Validate that token starts with 'ExponentPushToken'."""
+        if not value.startswith('ExponentPushToken['):
+            raise serializers.ValidationError(
+                "Invalid Expo token format. Must start with 'ExponentPushToken['"
+            )
+        return value
+
+
+class DeviceUnregisterSerializer(serializers.Serializer):
+    """Serializer for device unregistration endpoint."""
+
+    token = serializers.CharField(
+        max_length=255,
+        help_text="Expo push token"
+    )

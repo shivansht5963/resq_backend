@@ -9,6 +9,7 @@ from django.db import transaction
 from .models import Incident, IncidentSignal, Beacon
 from security.models import GuardAlert, GuardAssignment
 from chat.models import Conversation
+from accounts.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,7 @@ def alert_guards_for_incident(incident, max_guards=None):
     Send alerts to nearest guards based on incident priority.
     
     Uses ASSIGNMENT or BROADCAST alert type based on incident severity.
+    Sends push notifications to registered guard devices.
     
     CRITICAL: Only sends alerts if incident has NO active GuardAssignment.
     This prevents re-alerting when new signals arrive on existing incident.
@@ -229,15 +231,60 @@ def alert_guards_for_incident(incident, max_guards=None):
     
     # BROADCAST alerts go to all active guards (read-only)
     if alert_type == 'BROADCAST':
-        return broadcast_alert_all_guards(incident, requires_response=False)
+        alerts = broadcast_alert_all_guards(incident, requires_response=False)
+    else:
+        # ASSIGNMENT alerts use beacon-proximity search
+        alerts = alert_guards_via_beacon_proximity(
+            incident,
+            max_guards=max_guards,
+            alert_type=alert_type,
+            requires_response=requires_response
+        )
     
-    # ASSIGNMENT alerts use beacon-proximity search
-    return alert_guards_via_beacon_proximity(
-        incident,
-        max_guards=max_guards,
-        alert_type=alert_type,
-        requires_response=requires_response
-    )
+    # Send push notifications to all alerted guards
+    try:
+        send_push_notifications_for_alerts(incident, alerts)
+    except Exception as e:
+        logger.error(f"Failed to send push notifications for incident {incident.id}: {e}")
+    
+    return alerts
+
+
+def send_push_notifications_for_alerts(incident, guard_alerts):
+    """
+    Send push notifications to guards who received alerts.
+    
+    Args:
+        incident: Incident instance
+        guard_alerts: List of GuardAlert instances
+    """
+    if not guard_alerts:
+        return
+    
+    # Get location description
+    location = incident.location or incident.beacon.location_name
+    priority_name = dict(Incident.Priority.choices).get(incident.priority, 'MEDIUM')
+    
+    # Get unique guard users from alerts
+    guard_users = set(alert.recipient for alert in guard_alerts)
+    
+    for guard_user in guard_users:
+        try:
+            # Get all active device tokens for this guard
+            tokens = PushNotificationService.get_guard_tokens(guard_user)
+            
+            if tokens:
+                # Send GUARD_ALERT notification
+                PushNotificationService.notify_guard_alert(
+                    expo_tokens=tokens,
+                    incident_id=str(incident.id),
+                    alert_id=guard_alerts[0].id,  # Use first alert ID
+                    priority=priority_name,
+                    location=location
+                )
+                logger.info(f"Sent push notification to guard {guard_user.email} for incident {incident.id}")
+        except Exception as e:
+            logger.error(f"Failed to send notification to guard {guard_user.email}: {e}")
 
 
 def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, available_only=True):

@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.utils import timezone
-from .models import GuardProfile, GuardAssignment, DeviceToken, GuardAlert
-from .serializers import GuardProfileSerializer, GuardAssignmentSerializer, DeviceTokenSerializer, GuardAlertSerializer, GuardAlertDetailSerializer, GuardLocationUpdateSerializer
+from .models import GuardProfile, GuardAssignment, GuardAlert
+from .serializers import GuardProfileSerializer, GuardAssignmentSerializer, GuardAlertSerializer, GuardAlertDetailSerializer, GuardLocationUpdateSerializer
 from .utils import get_top_n_nearest_guards
 from accounts.permissions import IsGuard, IsAdmin
 
@@ -151,28 +151,6 @@ class GuardAssignmentViewSet(viewsets.ModelViewSet):
         assignment.is_active = False
         assignment.save()
         return Response(GuardAssignmentSerializer(assignment).data)
-
-
-class DeviceTokenViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Device Tokens (FCM for push notifications).
-    
-    GET /api/device-tokens/ - List device tokens
-    POST /api/device-tokens/ - Register new device token
-    GET /api/device-tokens/{id}/ - Get token details
-    DELETE /api/device-tokens/{id}/ - Delete token (logout device)
-    """
-    serializer_class = DeviceTokenSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        user = self.request.user
-        # Users can only see their own device tokens
-        return DeviceToken.objects.filter(user=user)
-    
-    def perform_create(self, serializer):
-        """Register device token for current user."""
-        serializer.save(user=self.request.user)
 
 
 class GuardAlertViewSet(viewsets.ModelViewSet):
