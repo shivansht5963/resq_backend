@@ -116,6 +116,74 @@ class GuardProfileViewSet(viewsets.ReadOnlyModelViewSet):
         })
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def active_assignment(self, request):
+        """
+        Get guard's current active assignment with full incident details.
+        
+        GET /api/guards/active_assignment/
+        
+        Response (if assigned):
+        {
+            "is_assigned": true,
+            "assignment": {
+                "id": 123,
+                "incident": {...full incident details...},
+                "assigned_at": "2026-01-01T10:00:00Z",
+                "is_active": true
+            }
+        }
+        
+        Response (if not assigned):
+        {
+            "is_assigned": false,
+            "message": "No active assignment"
+        }
+        """
+        from incidents.serializers import IncidentDetailedSerializer
+        
+        # Validate guard role
+        if request.user.role != 'GUARD':
+            return Response(
+                {'error': 'Only guards can access this endpoint'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get guard's profile
+        try:
+            guard_profile = request.user.guard_profile
+        except GuardProfile.DoesNotExist:
+            return Response(
+                {'error': 'Guard profile not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Find active assignment
+        active_assignment = GuardAssignment.objects.filter(
+            guard=request.user,
+            is_active=True
+        ).select_related('incident', 'incident__beacon').first()
+        
+        if not active_assignment:
+            return Response({
+                'is_assigned': False,
+                'message': 'No active assignment'
+            })
+        
+        # Return assignment with full incident details
+        return Response({
+            'is_assigned': True,
+            'assignment': {
+                'id': active_assignment.id,
+                'assigned_at': active_assignment.assigned_at,
+                'is_active': active_assignment.is_active,
+                'incident': IncidentDetailedSerializer(
+                    active_assignment.incident,
+                    context={'request': request}
+                ).data
+            }
+        })
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def incident_history(self, request):
         """
         Get guard's incident history.

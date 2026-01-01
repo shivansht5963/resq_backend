@@ -39,6 +39,22 @@ class GuardProfile(models.Model):
 
     def __str__(self):
         return f"GuardProfile: {self.user.full_name}"
+    
+    @property
+    def is_assigned(self):
+        """True if guard has an active assignment to any incident."""
+        return GuardAssignment.objects.filter(
+            guard=self.user,
+            is_active=True
+        ).exists()
+    
+    @property
+    def active_assignment(self):
+        """Returns the active GuardAssignment if any, else None."""
+        return GuardAssignment.objects.filter(
+            guard=self.user,
+            is_active=True
+        ).first()
 
 
 class GuardAssignment(models.Model):
@@ -70,6 +86,12 @@ class GuardAssignment(models.Model):
                 fields=["incident"],
                 condition=models.Q(is_active=True),
                 name="one_active_assignment_per_incident"
+            ),
+            # NEW: A guard can only have ONE active assignment at a time
+            models.UniqueConstraint(
+                fields=["guard"],
+                condition=models.Q(is_active=True),
+                name="one_active_assignment_per_guard"
             )
         ]
 

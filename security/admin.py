@@ -4,7 +4,11 @@ from .models import GuardProfile, GuardAssignment, GuardAlert
 
 @admin.register(GuardProfile)
 class GuardProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'is_active', 'is_available', 'current_beacon', 'last_active_at')
+    list_display = ('user', 'is_active', 'is_available', 'is_assigned', 'current_beacon', 'last_active_at')
+    
+    @admin.display(boolean=True, description='Assigned?')
+    def is_assigned(self, obj):
+        return obj.is_assigned
     list_filter = ('is_active', 'is_available', 'created_at')
     search_fields = ('user__email', 'user__full_name', 'current_beacon__location_name')
     ordering = ('-last_active_at',)

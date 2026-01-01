@@ -16,8 +16,8 @@ class GuardProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GuardProfile
-        fields = ('id', 'user', 'user_id', 'is_active', 'is_available', 'current_beacon', 'last_beacon_update', 'last_active_at', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'created_at', 'updated_at', 'last_beacon_update', 'current_beacon')
+        fields = ('id', 'user', 'user_id', 'is_active', 'is_available', 'is_assigned', 'current_beacon', 'last_beacon_update', 'last_active_at', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'created_at', 'updated_at', 'last_beacon_update', 'current_beacon', 'is_assigned')
     
     def get_current_beacon(self, obj):
         """Return beacon details if guard is assigned to one."""

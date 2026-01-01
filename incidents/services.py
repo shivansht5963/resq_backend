@@ -413,6 +413,13 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
     """
     Send push notifications to guards who received alerts.
     
+    Uses send_with_logging() for:
+    - Database logging (PushNotificationLog)
+    - Retry logic (3 attempts)
+    - GuardAlert tracking field updates
+    
+    Also logs ALERT_SENT event for each notification.
+    
     Args:
         incident: Incident instance
         guard_alerts: List of GuardAlert instances
@@ -425,36 +432,84 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
     location = incident.location or incident.beacon.location_name
     priority_name = dict(Incident.Priority.choices).get(incident.priority, 'MEDIUM')
     
-    # Group alerts by guard
-    alerts_by_guard = {}
-    for alert in guard_alerts:
-        guard_user = alert.guard
-        if guard_user not in alerts_by_guard:
-            alerts_by_guard[guard_user] = []
-        alerts_by_guard[guard_user].append(alert)
+    success_count = 0
+    fail_count = 0
     
     # Send notifications to each guard
-    for guard_user, user_alerts in alerts_by_guard.items():
+    for alert in guard_alerts:
+        guard_user = alert.guard
+        
         try:
             # Get all active device tokens for this guard
             tokens = PushNotificationService.get_guard_tokens(guard_user)
             
             if not tokens:
                 logger.warning(f"No active tokens for guard {guard_user.email}")
+                # Log event even if no tokens
+                log_incident_event(
+                    incident=incident,
+                    event_type=IncidentEvent.EventType.ALERT_FAILED,
+                    target_guard=guard_user,
+                    details={'error': 'No active push tokens', 'alert_id': alert.id}
+                )
+                fail_count += 1
                 continue
             
-            # Send GUARD_ALERT notification
-            alert_id = user_alerts[0].id if user_alerts else 0
-            PushNotificationService.notify_guard_alert(
-                expo_tokens=tokens,
-                incident_id=str(incident.id),
-                alert_id=alert_id,
-                priority=priority_name,
-                location=location
-            )
-            logger.info(f"✅ Sent push notification to guard {guard_user.email} (tokens: {len(tokens)}) for incident {incident.id}")
+            # Send notification with logging and retry
+            notification_data = {
+                "type": "GUARD_ALERT",
+                "incident_id": str(incident.id),
+                "alert_id": str(alert.id),
+                "priority": priority_name,
+                "location": location
+            }
+            
+            # Send to each token (usually one per device)
+            token_success = False
+            for token in tokens:
+                success = PushNotificationService.send_with_logging(
+                    recipient=guard_user,
+                    expo_token=token,
+                    notification_type='GUARD_ALERT',
+                    title="🚨 Incoming Alert",
+                    body=f"{priority_name} - {location}",
+                    data=notification_data,
+                    incident=incident,
+                    guard_alert=alert,
+                    max_retries=3
+                )
+                if success:
+                    token_success = True
+            
+            if token_success:
+                # Log ALERT_SENT event
+                log_incident_event(
+                    incident=incident,
+                    event_type=IncidentEvent.EventType.ALERT_SENT,
+                    target_guard=guard_user,
+                    details={
+                        'alert_id': alert.id,
+                        'priority_rank': alert.priority_rank,
+                        'tokens_count': len(tokens)
+                    }
+                )
+                success_count += 1
+                logger.info(f"✅ Sent push to guard {guard_user.email} for incident {str(incident.id)[:8]}")
+            else:
+                # Log failure event
+                log_incident_event(
+                    incident=incident,
+                    event_type=IncidentEvent.EventType.ALERT_FAILED,
+                    target_guard=guard_user,
+                    details={'error': 'All tokens failed', 'alert_id': alert.id}
+                )
+                fail_count += 1
+                
         except Exception as e:
             logger.error(f"❌ Failed to send notification to guard {guard_user.email}: {e}", exc_info=True)
+            fail_count += 1
+    
+    logger.info(f"[PUSH] Push notification summary: {success_count} success, {fail_count} failed")
 
 
 def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, available_only=True):
