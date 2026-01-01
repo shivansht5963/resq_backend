@@ -1,24 +1,21 @@
 """
 Push notification service for Expo push notifications.
 Handles sending notifications to mobile devices via Expo's push API.
-Uses the official exponent_server_sdk for robust notification handling.
+Simple, reliable implementation using requests library.
 """
 
 import logging
+import requests
 from typing import List, Dict, Any, Optional
-from exponent_server_sdk import (
-    DeviceNotRegisteredError,
-    PushClient,
-    PushMessage,
-    PushServerError,
-    PushTicketError,
-)
 
 logger = logging.getLogger(__name__)
 
+# Expo Push API endpoint
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+
 
 class PushNotificationService:
-    """Service to send push notifications via Expo using the official SDK."""
+    """Service to send push notifications via Expo using requests library."""
 
     @staticmethod
     def send_notification(
@@ -43,95 +40,227 @@ class PushNotificationService:
         Returns:
             bool: True if sent successfully, False otherwise
         """
-        if not expo_token or not expo_token.startswith("ExponentPushToken"):
-            logger.warning(f"Invalid or missing Expo token: {expo_token}")
+        if not expo_token:
+            logger.warning("Empty expo token provided")
+            return False
+        
+        if not str(expo_token).startswith("ExponentPushToken"):
+            logger.warning(f"Invalid expo token format: {expo_token}")
             return False
 
+        payload = {
+            "to": expo_token,
+            "sound": sound,
+            "title": title,
+            "body": body,
+            "priority": priority,
+        }
+
+        if data:
+            payload["data"] = data
+
         try:
-            message = PushMessage(
-                to=expo_token,
-                title=title,
-                body=body,
-                data=data or {},
-                sound=sound,
-                priority=priority,
-            )
+            logger.info(f"Sending push notification to {expo_token[:30]}...")
+            response = requests.post(EXPO_PUSH_URL, json=payload, timeout=10)
+            response.raise_for_status()
+            result = response.json()
             
-            response = PushClient().publish(message)
-            response.validate_response()
-            logger.info(f"Push notification sent successfully to {expo_token[:30]}...")
+            logger.info(f"Push notification sent successfully: {result}")
             return True
-        except DeviceNotRegisteredError:
-            logger.warning(f"Device token no longer registered: {expo_token[:30]}...")
-            return False
-        except PushServerError as e:
-            logger.error(f"Expo server error: {str(e)}")
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send push notification: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Failed to send notification to {expo_token}: {str(e)}")
+            logger.error(f"Unexpected error sending push: {str(e)}")
             return False
 
     @staticmethod
+    def send_with_logging(
+        recipient,
+        expo_token: str,
+        notification_type: str,
+        title: str,
+        body: str,
+        data: Optional[Dict[str, Any]] = None,
+        incident=None,
+        guard_alert=None,
+        max_retries: int = 3
+    ) -> bool:
+        """
+        Send push notification with database logging and retry logic.
+        
+        Creates a PushNotificationLog entry for audit trail.
+        Retries up to max_retries times on failure.
+        Updates GuardAlert tracking fields if provided.
+        
+        Args:
+            recipient: User receiving the notification
+            expo_token: Expo push token
+            notification_type: PushNotificationLog.NotificationType choice
+            title: Notification title
+            body: Notification body
+            data: Additional data payload
+            incident: Related Incident (optional)
+            guard_alert: Related GuardAlert (optional)
+            max_retries: Max retry attempts (default: 3)
+        
+        Returns:
+            bool: True if sent successfully
+        """
+        from django.utils import timezone
+        from .models import PushNotificationLog
+        
+        if not expo_token or not str(expo_token).startswith("ExponentPushToken"):
+            logger.warning(f"Invalid expo token for logging: {expo_token}")
+            return False
+        
+        # Create log entry in QUEUED status
+        log = PushNotificationLog.objects.create(
+            recipient=recipient,
+            device_token=expo_token,
+            notification_type=notification_type,
+            incident=incident,
+            guard_alert=guard_alert,
+            title=title,
+            body=body,
+            data_payload=data or {},
+            status=PushNotificationLog.Status.QUEUED,
+            max_retries=max_retries
+        )
+        
+        # Retry loop
+        success = False
+        last_error = ""
+        
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
+            try:
+                payload = {
+                    "to": expo_token,
+                    "sound": "default",
+                    "title": title,
+                    "body": body,
+                    "priority": "high",
+                }
+                if data:
+                    payload["data"] = data
+                
+                response = requests.post(EXPO_PUSH_URL, json=payload, timeout=10)
+                response.raise_for_status()
+                result = response.json()
+                
+                # Check for Expo-level errors
+                if result.get("data"):
+                    ticket = result["data"][0] if isinstance(result["data"], list) else result["data"]
+                    if ticket.get("status") == "error":
+                        raise Exception(ticket.get("message", "Expo error"))
+                    log.expo_ticket_id = ticket.get("id", "")
+                
+                # Success!
+                log.status = PushNotificationLog.Status.SENT
+                log.sent_at = timezone.now()
+                log.save()
+                
+                # Update GuardAlert if provided
+                if guard_alert:
+                    guard_alert.push_notification_sent = True
+                    guard_alert.push_notification_sent_at = timezone.now()
+                    guard_alert.save(update_fields=[
+                        'push_notification_sent', 
+                        'push_notification_sent_at'
+                    ])
+                
+                logger.info(
+                    f"[PUSH] ✅ Notification sent to {str(recipient.id)[:8]} "
+                    f"(attempt {attempt + 1}/{max_retries + 1})"
+                )
+                success = True
+                break
+                
+            except requests.exceptions.RequestException as e:
+                last_error = str(e)
+                log.retry_count = attempt + 1
+                log.save(update_fields=['retry_count'])
+                
+                if attempt < max_retries:
+                    logger.warning(
+                        f"[PUSH] Retry {attempt + 1}/{max_retries} for {str(recipient.id)[:8]}: {e}"
+                    )
+                    import time
+                    time.sleep(1)  # Brief delay between retries
+                    
+            except Exception as e:
+                last_error = str(e)
+                log.retry_count = attempt + 1
+                log.save(update_fields=['retry_count'])
+                
+                if attempt < max_retries:
+                    logger.warning(f"[PUSH] Retry {attempt + 1}/{max_retries}: {e}")
+                    import time
+                    time.sleep(1)
+        
+        # If all retries failed
+        if not success:
+            log.status = PushNotificationLog.Status.FAILED
+            log.failed_at = timezone.now()
+            log.error_message = last_error
+            log.save()
+            
+            # Update GuardAlert with error
+            if guard_alert:
+                guard_alert.push_notification_error = last_error[:500]
+                guard_alert.save(update_fields=['push_notification_error'])
+            
+            logger.error(
+                f"[PUSH] ❌ Failed after {max_retries + 1} attempts for {str(recipient.id)[:8]}: {last_error}"
+            )
+        
+        return success
+
+    @staticmethod
     def send_batch_notifications(
-        tokens_and_messages: List[Dict[str, Any]]
+        messages: List[Dict[str, Any]]
     ) -> List[bool]:
         """
         Send multiple push notifications in a batch.
 
         Args:
-            tokens_and_messages: List of dicts with:
+            messages: List of dicts with:
                 - to: Expo push token
                 - title: Notification title
                 - body: Notification body
                 - data: Optional data dict
                 - priority: Optional priority level
+                - sound: Optional sound
 
         Returns:
             List of bools indicating success for each notification
         """
-        if not tokens_and_messages:
+        if not messages:
             logger.warning("No messages provided for batch send")
             return []
 
-        # Filter and build valid messages
-        messages = []
-        for msg in tokens_and_messages:
+        results = []
+        for idx, msg in enumerate(messages):
             token = msg.get("to")
-            if token and token.startswith("ExponentPushToken"):
-                try:
-                    push_msg = PushMessage(
-                        to=token,
-                        title=msg.get("title", ""),
-                        body=msg.get("body", ""),
-                        data=msg.get("data", {}),
-                        sound=msg.get("sound", "default"),
-                        priority=msg.get("priority", "high"),
-                    )
-                    messages.append(push_msg)
-                except Exception as e:
-                    logger.error(f"Invalid message format: {str(e)}")
-            else:
-                logger.warning(f"Invalid token in batch: {token}")
+            if not token:
+                logger.warning(f"Message {idx} missing 'to' field")
+                results.append(False)
+                continue
+            
+            success = PushNotificationService.send_notification(
+                expo_token=token,
+                title=msg.get("title", ""),
+                body=msg.get("body", ""),
+                data=msg.get("data"),
+                sound=msg.get("sound", "default"),
+                priority=msg.get("priority", "high")
+            )
+            results.append(success)
 
-        if not messages:
-            logger.warning("No valid messages to send")
-            return []
-
-        try:
-            responses = PushClient().publish_multiple(messages)
-            results = []
-            for idx, response in enumerate(responses):
-                try:
-                    response.validate_response()
-                    results.append(True)
-                    logger.info(f"Batch message {idx + 1} sent successfully")
-                except (PushTicketError, PushServerError) as e:
-                    logger.warning(f"Batch message {idx + 1} failed: {str(e)}")
-                    results.append(False)
-            return results
-        except PushServerError as e:
-            logger.error(f"Batch push failed: {str(e)}")
-            return [False] * len(messages)
+        sent_count = sum(1 for r in results if r)
+        logger.info(f"Batch send: {sent_count}/{len(messages)} notifications sent successfully")
+        return results
 
     @staticmethod
     def notify_guard_alert(

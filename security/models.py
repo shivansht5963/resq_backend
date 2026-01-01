@@ -147,6 +147,16 @@ class GuardAlert(models.Model):
     )
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Push notification tracking
+    push_notification_sent = models.BooleanField(default=False, help_text="Whether push was sent")
+    push_notification_sent_at = models.DateTimeField(null=True, blank=True)
+    push_notification_delivered = models.BooleanField(default=False, help_text="Whether push was delivered")
+    push_notification_error = models.TextField(blank=True, help_text="Error message if push failed")
+    
+    # Response tracking
+    responded_at = models.DateTimeField(null=True, blank=True, help_text="When guard accepted/declined")
+    decline_reason = models.TextField(blank=True, help_text="Optional reason for declining")
+    
     class Meta:
         ordering = ["priority_rank", "-alert_sent_at"]
         indexes = [

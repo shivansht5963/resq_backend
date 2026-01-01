@@ -15,25 +15,11 @@ logger = logging.getLogger(__name__)
 def find_available_guards_via_beacon_proximity(incident_beacon, max_guards=3, exclude_guard_ids=None):
     """
     Expanding-radius beacon search: find available guards.
-    
-    Search order:
-    1. Incident beacon itself
-    2. Nearby beacons (by priority order from BeaconProximity)
-    3. Continue expanding until max_guards found or all beacons exhausted
-    
-    Args:
-        incident_beacon: Beacon instance where incident occurred
-        max_guards: Max number of guards to return (default 3)
-        exclude_guard_ids: List of guard user IDs to skip (already alerted or busy)
-    
-    Returns:
-        list: [(guard_user, beacon, priority_level), ...] ordered by beacon search order
-    
-    Notes:
-        - Guards must be is_active=True and is_available=True
-        - Guards already assigned to another incident are skipped
-        - Returns in beacon search order (not by guard availability)
     """
+    logger.info(
+        f"[SEARCH] 🔍 find_available_guards: beacon={incident_beacon.location_name} "
+        f"(id={str(incident_beacon.id)[:8]}...) | max_guards={max_guards}"
+    )
     
     if exclude_guard_ids is None:
         exclude_guard_ids = []
@@ -60,6 +46,14 @@ def find_available_guards_via_beacon_proximity(incident_beacon, max_guards=3, ex
             user_id__in=exclude_guard_ids
         ).select_related('user')
         
+        # Log what we're finding
+        all_guards_at_beacon = GuardProfile.objects.filter(current_beacon=current_beacon)
+        logger.info(
+            f"[SEARCH] Beacon '{current_beacon.location_name}': "
+            f"total_guards={all_guards_at_beacon.count()}, "
+            f"eligible={guard_profiles.count()}"
+        )
+        
         for guard_profile in guard_profiles:
             # Check if guard is already assigned to another active incident
             existing_assignment = GuardAssignment.objects.filter(
@@ -68,13 +62,15 @@ def find_available_guards_via_beacon_proximity(incident_beacon, max_guards=3, ex
             ).exists()
             
             if existing_assignment:
-                logger.debug(
-                    f"[SKIP] Guard {guard_profile.user.full_name} already assigned to another incident",
-                    extra={'guard_id': str(guard_profile.user.id)}
+                logger.info(
+                    f"[SEARCH] ⚠️ SKIP: Guard {guard_profile.user.full_name} already has active assignment"
                 )
                 continue
             
             found_guards.append((guard_profile.user, current_beacon, priority_level))
+            logger.info(
+                f"[SEARCH] ✅ FOUND: Guard {guard_profile.user.full_name} at {current_beacon.location_name}"
+            )
             
             if len(found_guards) >= max_guards:
                 break
@@ -90,13 +86,21 @@ def find_available_guards_via_beacon_proximity(incident_beacon, max_guards=3, ex
                     search_queue.append((proximity.to_beacon, proximity.priority))
     
     logger.info(
-        f"[SEARCH] Found {len(found_guards)} guards for beacon {incident_beacon.location_name}",
-        extra={
-            'beacon_id': str(incident_beacon.id),
-            'guards_found': len(found_guards),
-            'max_guards': max_guards
-        }
+        f"[SEARCH] 📊 Result: found {len(found_guards)} guards for beacon {incident_beacon.location_name}"
     )
+    
+    if len(found_guards) == 0:
+        # Debug: show all guard profiles to help diagnose
+        all_guards = GuardProfile.objects.select_related('user', 'current_beacon').all()
+        logger.warning(f"[SEARCH] ⚠️ NO GUARDS FOUND! Debugging all guards:")
+        for gp in all_guards:
+            beacon_match = gp.current_beacon and gp.current_beacon.id == incident_beacon.id
+            logger.warning(
+                f"[SEARCH]   - {gp.user.full_name}: "
+                f"is_active={gp.is_active}, is_available={gp.is_available}, "
+                f"user.is_active={gp.user.is_active}, "
+                f"beacon={'MATCH' if beacon_match else gp.current_beacon.location_name if gp.current_beacon else 'NULL'}"
+            )
     
     return found_guards[:max_guards]
 

@@ -35,17 +35,18 @@ class GuardAssignmentAdmin(admin.ModelAdmin):
 class GuardAlertAdmin(admin.ModelAdmin):
     """
     Admin for monitoring guard alerts in incident response.
-    Shows alert status, priority ranking, and assignment linkage.
+    Shows alert status, type, priority ranking, and push notification tracking.
     """
-    list_display = ('id', 'incident', 'guard', 'status', 'priority_rank', 'alert_sent_at')
-    list_filter = ('status', 'priority_rank', 'alert_sent_at', 'incident__beacon__building')
-    search_fields = ('guard__user__email', 'guard__user__full_name', 'incident__id')
+    list_display = ('id', 'incident', 'guard', 'alert_type', 'status', 'priority_rank', 'requires_response', 'alert_sent_at')
+    list_filter = ('status', 'alert_type', 'requires_response', 'priority_rank', 'alert_sent_at', 'incident__beacon__building')
+    search_fields = ('guard__email', 'guard__full_name', 'incident__id')
     ordering = ('-alert_sent_at',)
-    readonly_fields = ('id', 'alert_sent_at', 'updated_at')
+    readonly_fields = ('id', 'alert_sent_at', 'updated_at', 'responded_at')
     fieldsets = (
-        ('Alert Info', {'fields': ('id', 'incident', 'guard')}),
-        ('Status', {'fields': ('status', 'priority_rank', 'distance_km')}),
+        ('Alert Info', {'fields': ('id', 'incident', 'guard', 'alert_type')}),
+        ('Response', {'fields': ('status', 'requires_response', 'priority_rank', 'distance_km', 'response_deadline')}),
         ('Assignment', {'fields': ('assignment',)}),
+        ('Push Notification', {'fields': ('push_notification_sent', 'push_notification_sent_at', 'push_notification_delivered', 'push_notification_error')}),
+        ('Response Tracking', {'fields': ('responded_at', 'decline_reason')}),
         ('Timestamps', {'fields': ('alert_sent_at', 'updated_at')}),
     )
-

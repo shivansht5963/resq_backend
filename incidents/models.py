@@ -101,6 +101,10 @@ class Incident(models.Model):
         HIGH = 3, "High"
         CRITICAL = 4, "Critical"
     
+    class ResolutionType(models.TextChoices):
+        RESOLVED_BY_GUARD = "RESOLVED_BY_GUARD", "Resolved by Guard"
+        ESCALATED_TO_ADMIN = "ESCALATED_TO_ADMIN", "Escalated to Admin"
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     beacon = models.ForeignKey(
         Beacon,
@@ -134,6 +138,39 @@ class Incident(models.Model):
     last_signal_time = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Resolution tracking
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="resolved_incidents",
+        help_text="Guard/Admin who resolved this incident"
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_notes = models.TextField(blank=True, help_text="Notes about how incident was resolved")
+    resolution_type = models.CharField(
+        max_length=30,
+        choices=ResolutionType.choices,
+        blank=True,
+        help_text="How the incident was resolved"
+    )
+    
+    # Assignment tracking (denormalized for quick access)
+    current_assigned_guard = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="currently_assigned_incidents",
+        help_text="Currently assigned guard"
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    
+    # Alert stats
+    total_alerts_sent = models.PositiveIntegerField(default=0, help_text="Total alerts sent to guards")
+    total_alerts_declined = models.PositiveIntegerField(default=0, help_text="Total alerts declined by guards")
     
     class Meta:
         ordering = ["-created_at"]
@@ -287,3 +324,96 @@ class PhysicalDevice(models.Model):
     
     def __str__(self):
         return f"{self.device_id} ({self.get_device_type_display()}) - {self.beacon.location_name}"
+
+
+class IncidentEvent(models.Model):
+    """
+    Complete audit trail for incident lifecycle.
+    Tracks all events from creation to resolution including alerts, assignments, and status changes.
+    """
+    
+    class EventType(models.TextChoices):
+        # Incident lifecycle
+        INCIDENT_CREATED = "INCIDENT_CREATED", "Incident Created"
+        STATUS_CHANGED = "STATUS_CHANGED", "Status Changed"
+        PRIORITY_CHANGED = "PRIORITY_CHANGED", "Priority Changed"
+        
+        # Guard alerts
+        ALERT_SENT = "ALERT_SENT", "Alert Sent to Guard"
+        ALERT_DELIVERED = "ALERT_DELIVERED", "Push Notification Delivered"
+        ALERT_FAILED = "ALERT_FAILED", "Push Notification Failed"
+        
+        # Guard responses
+        ALERT_ACCEPTED = "ALERT_ACCEPTED", "Guard Accepted Alert"
+        ALERT_DECLINED = "ALERT_DECLINED", "Guard Declined Alert"
+        ALERT_EXPIRED = "ALERT_EXPIRED", "Alert Expired (No Response)"
+        
+        # Assignment
+        GUARD_ASSIGNED = "GUARD_ASSIGNED", "Guard Assigned"
+        GUARD_UNASSIGNED = "GUARD_UNASSIGNED", "Guard Unassigned"
+        
+        # Resolution
+        RESOLUTION_STARTED = "RESOLUTION_STARTED", "Resolution Started"
+        INCIDENT_RESOLVED = "INCIDENT_RESOLVED", "Incident Resolved"
+        
+        # Escalation
+        ESCALATED_NO_RESPONSE = "ESCALATED_NO_RESPONSE", "Escalated - No Response"
+        ALL_GUARDS_EXHAUSTED = "ALL_GUARDS_EXHAUSTED", "All Guards Exhausted"
+    
+    id = models.AutoField(primary_key=True)
+    incident = models.ForeignKey(
+        Incident,
+        on_delete=models.CASCADE,
+        related_name="events"
+    )
+    event_type = models.CharField(
+        max_length=50,
+        choices=EventType.choices,
+        db_index=True
+    )
+    
+    # Who triggered the event
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="incident_events_triggered",
+        help_text="User who triggered this event"
+    )
+    
+    # Target guard (for alert events)
+    target_guard = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="incident_events_targeted",
+        help_text="Guard targeted by this event (for alerts)"
+    )
+    
+    # State transition tracking
+    previous_status = models.CharField(max_length=20, blank=True)
+    new_status = models.CharField(max_length=20, blank=True)
+    previous_priority = models.IntegerField(null=True, blank=True)
+    new_priority = models.IntegerField(null=True, blank=True)
+    
+    # Additional context
+    details = models.JSONField(default=dict, blank=True, help_text="Flexible metadata for event")
+    
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["incident", "-created_at"]),
+            models.Index(fields=["event_type", "-created_at"]),
+            models.Index(fields=["actor", "-created_at"]),
+            models.Index(fields=["target_guard", "-created_at"]),
+        ]
+        verbose_name = "Incident Event"
+        verbose_name_plural = "Incident Events"
+    
+    def __str__(self):
+        return f"[{self.get_event_type_display()}] Incident {str(self.incident.id)[:8]} at {self.created_at.strftime('%H:%M:%S')}"
+

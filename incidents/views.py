@@ -294,21 +294,102 @@ class IncidentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def resolve(self, request, pk=None):
         """
-        Mark incident as RESOLVED.
+        Mark incident as RESOLVED with full audit trail.
         
         POST /api/incidents/{id}/resolve/
+        
+        Request Body:
+        {
+            "resolution_notes": "Description of resolution (REQUIRED)",
+            "resolution_type": "RESOLVED_BY_GUARD" | "ESCALATED_TO_ADMIN"
+        }
+        
+        Requirements:
+        - Incident must NOT be already resolved
+        - Non-admins: Must have an active assignment to this incident
+        - Admins: Can resolve any incident without assignment
+        - resolution_notes is REQUIRED
+        
+        Side Effects:
+        - Updates incident status to RESOLVED
+        - Sets resolved_by, resolved_at, resolution_notes, resolution_type
+        - Deactivates any active guard assignment
+        - Logs INCIDENT_RESOLVED event to audit trail
         """
+        from django.utils import timezone
+        from .services import log_incident_event, validate_status_transition
+        from .models import IncidentEvent
+        from security.models import GuardAssignment
+        
         incident = self.get_object()
         
+        # 1. State validation using state machine
+        if not validate_status_transition(incident.status, Incident.Status.RESOLVED):
+            return Response(
+                {'error': f'Cannot resolve incident in {incident.status} status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 2. Check for active assignment (non-admins need assignment)
+        active_assignment = GuardAssignment.objects.filter(
+            incident=incident,
+            is_active=True
+        ).first()
+        
+        is_admin = request.user.role == 'ADMIN'
+        is_assigned_guard = active_assignment and active_assignment.guard == request.user
+        
+        if not is_admin and not is_assigned_guard:
+            return Response(
+                {'error': 'Only assigned guard or admin can resolve this incident'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # 3. Validate resolution notes (REQUIRED)
+        resolution_notes = request.data.get('resolution_notes', '').strip()
+        if not resolution_notes:
+            return Response(
+                {'error': 'resolution_notes is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 4. Get and validate resolution type
+        resolution_type = request.data.get('resolution_type', Incident.ResolutionType.RESOLVED_BY_GUARD)
+        valid_types = [choice[0] for choice in Incident.ResolutionType.choices]
+        if resolution_type not in valid_types:
+            resolution_type = Incident.ResolutionType.RESOLVED_BY_GUARD
+        
+        # Store previous status for event logging
+        previous_status = incident.status
+        
+        # Update incident
         incident.status = Incident.Status.RESOLVED
+        incident.resolved_by = request.user
+        incident.resolved_at = timezone.now()
+        incident.resolution_notes = resolution_notes
+        incident.resolution_type = resolution_type
         incident.save()
         
         # Deactivate any active assignment
-        from security.models import GuardAssignment
-        GuardAssignment.objects.filter(
+        deactivated = GuardAssignment.objects.filter(
             incident=incident,
             is_active=True
         ).update(is_active=False)
+        
+        # Log event to audit trail
+        log_incident_event(
+            incident=incident,
+            event_type=IncidentEvent.EventType.INCIDENT_RESOLVED,
+            actor=request.user,
+            previous_status=previous_status,
+            new_status=Incident.Status.RESOLVED,
+            details={
+                'resolution_type': resolution_type,
+                'resolution_notes': resolution_notes[:200],
+                'assignments_deactivated': deactivated,
+                'resolved_by_role': request.user.role
+            }
+        )
         
         return Response(IncidentDetailedSerializer(incident, context={'request': request}).data)
     
@@ -386,6 +467,113 @@ class IncidentViewSet(viewsets.ModelViewSet):
         serializer = IncidentSignalSerializer(signals, many=True)
         
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def timeline(self, request, pk=None):
+        """
+        Get full incident timeline with all events.
+        
+        GET /api/incidents/{id}/timeline/
+        
+        Returns incident details with complete event history (audit trail).
+        Guards and admins can view timelines for any incident.
+        Students can only view timeline for incidents they reported.
+        
+        Response:
+        {
+            "id": "uuid",
+            "beacon": {...},
+            "status": "ASSIGNED",
+            "priority": 3,
+            "events": [
+                {
+                    "id": 1,
+                    "event_type": "INCIDENT_CREATED",
+                    "event_type_display": "Incident Created",
+                    "actor": {"id": "uuid", "full_name": "...", "role": "STUDENT"},
+                    "target_guard": null,
+                    "previous_status": "",
+                    "new_status": "CREATED",
+                    "details": {"signal_type": "STUDENT_SOS"},
+                    "created_at": "2026-01-01T10:00:00Z"
+                },
+                ...
+            ],
+            "current_assignment": {...},
+            "resolution_info": null
+        }
+        """
+        from .serializers import IncidentTimelineSerializer
+        
+        incident = self.get_object()
+        
+        # Permission check: guards/admins can view any, students only their own
+        is_student_reporter = incident.signals.filter(source_user=request.user).exists()
+        is_guard_or_admin = request.user.role in ['GUARD', 'ADMIN']
+        
+        if not (is_student_reporter or is_guard_or_admin):
+            return Response(
+                {'error': 'You do not have permission to view this timeline'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = IncidentTimelineSerializer(incident, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def events(self, request, pk=None):
+        """
+        Get event history for an incident (flat list).
+        
+        GET /api/incidents/{id}/events/
+        
+        Query Parameters:
+        - event_type: Filter by event type (e.g., ALERT_SENT, STATUS_CHANGED)
+        - limit: Number of events to return (default: 50)
+        
+        Response:
+        {
+            "count": 5,
+            "events": [
+                {
+                    "id": 1,
+                    "event_type": "INCIDENT_CREATED",
+                    "event_type_display": "Incident Created",
+                    ...
+                },
+                ...
+            ]
+        }
+        """
+        from .serializers import IncidentEventSerializer
+        
+        incident = self.get_object()
+        
+        # Permission check
+        is_student_reporter = incident.signals.filter(source_user=request.user).exists()
+        is_guard_or_admin = request.user.role in ['GUARD', 'ADMIN']
+        
+        if not (is_student_reporter or is_guard_or_admin):
+            return Response(
+                {'error': 'You do not have permission to view these events'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get events with optional filters
+        events = incident.events.all().order_by('-created_at')
+        
+        event_type = request.query_params.get('event_type')
+        if event_type:
+            events = events.filter(event_type=event_type)
+        
+        limit = int(request.query_params.get('limit', 50))
+        events = events[:limit]
+        
+        serializer = IncidentEventSerializer(events, many=True)
+        return Response({
+            'count': len(serializer.data),
+            'events': serializer.data
+        })
 
 
 @api_view(['POST'])

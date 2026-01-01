@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Beacon, Incident, IncidentSignal, PhysicalDevice, IncidentImage
+from .models import Beacon, Incident, IncidentSignal, PhysicalDevice, IncidentImage, IncidentEvent
 from security.models import GuardAssignment, GuardAlert
 from chat.models import Conversation, Message
 
@@ -332,3 +332,152 @@ class IncidentReportSerializer(serializers.Serializer):
 
     class Meta:
         fields = ('beacon_id', 'type', 'description', 'location')
+
+
+class IncidentEventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for IncidentEvent - audit trail entries.
+    
+    Used for the incident timeline/history endpoints.
+    """
+    
+    actor = serializers.SerializerMethodField()
+    target_guard = serializers.SerializerMethodField()
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+    
+    class Meta:
+        model = IncidentEvent
+        fields = (
+            'id', 'event_type', 'event_type_display',
+            'actor', 'target_guard',
+            'previous_status', 'new_status',
+            'previous_priority', 'new_priority',
+            'details', 'created_at'
+        )
+        read_only_fields = ('id', 'created_at')
+    
+    def get_actor(self, obj):
+        """Return actor user info."""
+        if obj.actor:
+            return {
+                'id': str(obj.actor.id),
+                'full_name': obj.actor.full_name,
+                'email': obj.actor.email,
+                'role': obj.actor.role
+            }
+        return None
+    
+    def get_target_guard(self, obj):
+        """Return target guard info (for alert events)."""
+        if obj.target_guard:
+            return {
+                'id': str(obj.target_guard.id),
+                'full_name': obj.target_guard.full_name,
+                'email': obj.target_guard.email
+            }
+        return None
+
+
+class IncidentTimelineSerializer(serializers.ModelSerializer):
+    """
+    Serializer for incident timeline view.
+    
+    Returns incident with full event history for audit trail.
+    Used by guards and admins to view complete incident history.
+    """
+    
+    beacon = BeaconSerializer(read_only=True)
+    events = IncidentEventSerializer(many=True, read_only=True)
+    current_assignment = serializers.SerializerMethodField()
+    resolution_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Incident
+        fields = (
+            'id', 'beacon', 'status', 'priority', 'description',
+            'report_type', 'location',
+            'current_assignment', 'resolution_info',
+            'events',  # Full event timeline
+            'created_at', 'updated_at', 'resolved_at'
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at', 'resolved_at')
+    
+    def get_current_assignment(self, obj):
+        """Get active guard assignment info."""
+        try:
+            assignment = obj.guard_assignments.get(is_active=True)
+            return {
+                'guard': {
+                    'id': str(assignment.guard.id),
+                    'full_name': assignment.guard.full_name,
+                    'email': assignment.guard.email
+                },
+                'assigned_at': assignment.assigned_at
+            }
+        except GuardAssignment.DoesNotExist:
+            return None
+    
+    def get_resolution_info(self, obj):
+        """Get resolution details if incident is resolved."""
+        if obj.status != Incident.Status.RESOLVED:
+            return None
+        
+        return {
+            'resolved_by': {
+                'id': str(obj.resolved_by.id),
+                'full_name': obj.resolved_by.full_name
+            } if obj.resolved_by else None,
+            'resolved_at': obj.resolved_at,
+            'resolution_type': obj.resolution_type,
+            'resolution_notes': obj.resolution_notes
+        }
+
+
+class GuardIncidentHistorySerializer(serializers.ModelSerializer):
+    """
+    Serializer for guard's incident history view.
+    
+    Shows incidents the guard was involved with (assigned, alerted, etc.)
+    Lighter weight than full timeline for list views.
+    """
+    
+    beacon = BeaconSerializer(read_only=True)
+    guard_role = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Incident
+        fields = (
+            'id', 'beacon', 'status', 'priority', 'description',
+            'report_type', 'location',
+            'guard_role',  # What role the guard played
+            'created_at', 'resolved_at'
+        )
+        read_only_fields = fields
+    
+    def get_guard_role(self, obj):
+        """
+        Determine what role the current guard played in this incident.
+        
+        Returns: 'assigned', 'accepted', 'declined', 'alerted', etc.
+        """
+        guard = self.context.get('guard')
+        if not guard:
+            return None
+        
+        # Check if guard was assigned
+        try:
+            assignment = obj.guard_assignments.get(guard=guard)
+            if assignment.is_active:
+                return 'currently_assigned'
+            return 'was_assigned'
+        except GuardAssignment.DoesNotExist:
+            pass
+        
+        # Check guard's alert status
+        alerts = obj.guard_alerts.filter(guard=guard)
+        if alerts.exists():
+            alert = alerts.first()
+            return f'alert_{alert.status.lower()}'
+        
+        return None
+

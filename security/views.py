@@ -114,6 +114,76 @@ class GuardProfileViewSet(viewsets.ReadOnlyModelViewSet):
             'detail': f'Guard assigned to beacon {beacon.location_name}',
             'guard': GuardProfileSerializer(guard_profile).data
         })
+    
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def incident_history(self, request):
+        """
+        Get guard's incident history.
+        
+        GET /api/guards/incident_history/
+        
+        Query Parameters:
+        - status: Filter by incident status (CREATED, ASSIGNED, IN_PROGRESS, RESOLVED)
+        - limit: Number of incidents to return (default: 20)
+        
+        Returns incidents where the current guard was:
+        - Assigned to the incident
+        - Received an alert for the incident
+        
+        Response:
+        {
+            "count": 10,
+            "incidents": [
+                {
+                    "id": "uuid",
+                    "beacon": {...},
+                    "status": "RESOLVED",
+                    "priority": 3,
+                    "guard_role": "was_assigned",
+                    "created_at": "2026-01-01T10:00:00Z",
+                    "resolved_at": "2026-01-01T11:30:00Z"
+                },
+                ...
+            ]
+        }
+        """
+        from incidents.models import Incident
+        from incidents.serializers import GuardIncidentHistorySerializer
+        from django.db.models import Q
+        
+        guard = request.user
+        
+        # Guards only - check role
+        if guard.role != 'GUARD':
+            return Response(
+                {'error': 'Only guards can view incident history'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get incidents where guard was involved
+        incidents = Incident.objects.filter(
+            Q(guard_assignments__guard=guard) |
+            Q(guard_alerts__guard=guard)
+        ).distinct().order_by('-created_at')
+        
+        # Apply filters
+        incident_status = request.query_params.get('status')
+        if incident_status:
+            incidents = incidents.filter(status=incident_status)
+        
+        limit = int(request.query_params.get('limit', 20))
+        incidents = incidents[:limit]
+        
+        serializer = GuardIncidentHistorySerializer(
+            incidents, 
+            many=True, 
+            context={'request': request, 'guard': guard}
+        )
+        
+        return Response({
+            'count': len(serializer.data),
+            'incidents': serializer.data
+        })
 
 
 class GuardAssignmentViewSet(viewsets.ModelViewSet):

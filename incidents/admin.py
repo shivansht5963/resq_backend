@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django import forms
-from .models import Beacon, BeaconProximity, PhysicalDevice, Incident, IncidentSignal, IncidentImage
+from .models import Beacon, BeaconProximity, PhysicalDevice, Incident, IncidentSignal, IncidentImage, IncidentEvent
 
 
 class BeaconProximityInline(admin.TabularInline):
@@ -107,16 +107,19 @@ class PhysicalDeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'report_type', 'location', 'signal_count', 'image_count', 'first_signal_time')
-    list_filter = ('status', 'priority', 'report_type', 'created_at', 'beacon__building')
+    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'report_type', 'location', 'signal_count', 'image_count', 'resolved_at')
+    list_filter = ('status', 'priority', 'report_type', 'resolution_type', 'created_at', 'beacon__building')
     search_fields = ('id', 'beacon__location_name', 'beacon__beacon_id', 'description', 'location', 'report_type')
     ordering = ('-created_at',)
-    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at', 'total_alerts_sent', 'total_alerts_declined')
     inlines = [IncidentSignalInline, IncidentImageInline]
     fieldsets = (
         ('Location', {'fields': ('beacon', 'location')}),
         ('Report Info', {'fields': ('report_type', 'description')}),
         ('Status', {'fields': ('status', 'priority')}),
+        ('Assignment', {'fields': ('current_assigned_guard', 'assigned_at')}),
+        ('Resolution', {'fields': ('resolved_by', 'resolved_at', 'resolution_type', 'resolution_notes')}),
+        ('Alert Stats', {'fields': ('total_alerts_sent', 'total_alerts_declined')}),
         ('Timestamps', {'fields': ('first_signal_time', 'last_signal_time', 'created_at', 'updated_at')}),
     )
     
@@ -212,3 +215,19 @@ class IncidentImageAdmin(admin.ModelAdmin):
         return "No image"
     image_preview.short_description = 'Preview'
 
+
+@admin.register(IncidentEvent)
+class IncidentEventAdmin(admin.ModelAdmin):
+    """Admin interface for incident audit trail events."""
+    list_display = ('id', 'incident', 'event_type', 'actor', 'target_guard', 'created_at')
+    list_filter = ('event_type', 'created_at')
+    search_fields = ('incident__id', 'actor__full_name', 'target_guard__full_name')
+    ordering = ('-created_at',)
+    readonly_fields = ('id', 'created_at')
+    fieldsets = (
+        ('Event Info', {'fields': ('incident', 'event_type')}),
+        ('Participants', {'fields': ('actor', 'target_guard')}),
+        ('State Changes', {'fields': ('previous_status', 'new_status', 'previous_priority', 'new_priority')}),
+        ('Details', {'fields': ('details',)}),
+        ('Timestamps', {'fields': ('id', 'created_at')}),
+    )

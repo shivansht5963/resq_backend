@@ -6,12 +6,149 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
-from .models import Incident, IncidentSignal, Beacon
+from .models import Incident, IncidentSignal, Beacon, IncidentEvent
 from security.models import GuardAlert, GuardAssignment
 from chat.models import Conversation
 from accounts.push_notifications import PushNotificationService
 
 logger = logging.getLogger(__name__)
+
+
+def log_incident_event(
+    incident,
+    event_type,
+    actor=None,
+    target_guard=None,
+    previous_status=None,
+    new_status=None,
+    previous_priority=None,
+    new_priority=None,
+    details=None
+):
+    """
+    Log an event in the incident's audit trail.
+    
+    Args:
+        incident: Incident instance
+        event_type: IncidentEvent.EventType choice
+        actor: User who triggered the event (optional)
+        target_guard: Guard targeted by the event (for alerts)
+        previous_status: Previous incident status
+        new_status: New incident status
+        previous_priority: Previous priority
+        new_priority: New priority
+        details: dict with additional context
+    
+    Returns:
+        IncidentEvent: Created event instance
+    """
+    try:
+        event = IncidentEvent.objects.create(
+            incident=incident,
+            event_type=event_type,
+            actor=actor,
+            target_guard=target_guard,
+            previous_status=previous_status or '',
+            new_status=new_status or '',
+            previous_priority=previous_priority,
+            new_priority=new_priority,
+            details=details or {}
+        )
+        
+        logger.info(
+            f"[EVENT] {event_type} logged for incident {str(incident.id)[:8]}...",
+            extra={'incident_id': str(incident.id), 'event_type': event_type}
+        )
+        
+        return event
+    except Exception as e:
+        logger.error(f"[EVENT] Failed to log event: {e}")
+        return None
+
+
+# =============================================================================
+# STATE MACHINE FOR INCIDENT STATUS TRANSITIONS
+# =============================================================================
+
+# Valid status transitions - defines allowed state changes
+VALID_TRANSITIONS = {
+    Incident.Status.CREATED: [
+        Incident.Status.ASSIGNED,
+        Incident.Status.RESOLVED,  # Admin can resolve without assignment
+    ],
+    Incident.Status.ASSIGNED: [
+        Incident.Status.IN_PROGRESS,
+        Incident.Status.CREATED,   # Can unassign
+        Incident.Status.RESOLVED,
+    ],
+    Incident.Status.IN_PROGRESS: [
+        Incident.Status.RESOLVED,
+        Incident.Status.ASSIGNED,  # Can reassign
+    ],
+    Incident.Status.RESOLVED: [],  # Terminal state - no transitions allowed
+}
+
+
+def validate_status_transition(current_status, new_status):
+    """
+    Check if a status transition is valid.
+    
+    Args:
+        current_status: Current incident status
+        new_status: Desired new status
+    
+    Returns:
+        bool: True if transition is allowed
+    """
+    allowed = VALID_TRANSITIONS.get(current_status, [])
+    return new_status in allowed
+
+
+def transition_incident_status(incident, new_status, actor, notes=""):
+    """
+    Safely transition incident status with validation and logging.
+    
+    Args:
+        incident: Incident instance
+        new_status: Target status
+        actor: User triggering the transition
+        notes: Optional notes for the event
+    
+    Returns:
+        tuple: (success: bool, error_message: str or None)
+    
+    Raises:
+        ValueError: If transition is not allowed
+    """
+    current = incident.status
+    
+    # Validate transition
+    if not validate_status_transition(current, new_status):
+        error_msg = f"Cannot transition from {current} to {new_status}"
+        logger.warning(f"[STATE] Invalid transition: {error_msg}")
+        return False, error_msg
+    
+    # Log the status change event
+    log_incident_event(
+        incident=incident,
+        event_type=IncidentEvent.EventType.STATUS_CHANGED,
+        actor=actor,
+        previous_status=current,
+        new_status=new_status,
+        details={"notes": notes} if notes else {}
+    )
+    
+    # Update incident
+    incident.status = new_status
+    incident.save(update_fields=["status", "updated_at"])
+    
+    logger.info(
+        f"[STATE] Incident {str(incident.id)[:8]} transitioned: {current} -> {new_status}",
+        extra={'incident_id': str(incident.id), 'old_status': current, 'new_status': new_status}
+    )
+    
+    return True, None
+
 
 # Configurable deduplication window (minutes)
 DEDUP_WINDOW_MINUTES = getattr(
@@ -144,6 +281,28 @@ def get_or_create_incident_with_signals(
         # Create conversation for new incident
         Conversation.objects.create(incident=incident)
         
+        # Log INCIDENT_CREATED event
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        actor = None
+        if source_user_id:
+            try:
+                actor = User.objects.get(id=source_user_id)
+            except User.DoesNotExist:
+                pass
+        
+        log_incident_event(
+            incident=incident,
+            event_type=IncidentEvent.EventType.INCIDENT_CREATED,
+            actor=actor,
+            new_status=Incident.Status.CREATED,
+            new_priority=incident.priority,
+            details={
+                'signal_type': signal_type,
+                'beacon_name': beacon.location_name
+            }
+        )
+        
         logger.info(
             f"[NEW] Created incident {incident.id} with signal {signal_type}",
             extra={'beacon_id': str(beacon.id), 'incident_id': str(incident.id)}
@@ -259,32 +418,43 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
         guard_alerts: List of GuardAlert instances
     """
     if not guard_alerts:
+        logger.warning(f"No guard alerts to send notifications for incident {incident.id}")
         return
     
     # Get location description
     location = incident.location or incident.beacon.location_name
     priority_name = dict(Incident.Priority.choices).get(incident.priority, 'MEDIUM')
     
-    # Get unique guard users from alerts
-    guard_users = set(alert.recipient for alert in guard_alerts)
+    # Group alerts by guard
+    alerts_by_guard = {}
+    for alert in guard_alerts:
+        guard_user = alert.guard
+        if guard_user not in alerts_by_guard:
+            alerts_by_guard[guard_user] = []
+        alerts_by_guard[guard_user].append(alert)
     
-    for guard_user in guard_users:
+    # Send notifications to each guard
+    for guard_user, user_alerts in alerts_by_guard.items():
         try:
             # Get all active device tokens for this guard
             tokens = PushNotificationService.get_guard_tokens(guard_user)
             
-            if tokens:
-                # Send GUARD_ALERT notification
-                PushNotificationService.notify_guard_alert(
-                    expo_tokens=tokens,
-                    incident_id=str(incident.id),
-                    alert_id=guard_alerts[0].id,  # Use first alert ID
-                    priority=priority_name,
-                    location=location
-                )
-                logger.info(f"Sent push notification to guard {guard_user.email} for incident {incident.id}")
+            if not tokens:
+                logger.warning(f"No active tokens for guard {guard_user.email}")
+                continue
+            
+            # Send GUARD_ALERT notification
+            alert_id = user_alerts[0].id if user_alerts else 0
+            PushNotificationService.notify_guard_alert(
+                expo_tokens=tokens,
+                incident_id=str(incident.id),
+                alert_id=alert_id,
+                priority=priority_name,
+                location=location
+            )
+            logger.info(f"✅ Sent push notification to guard {guard_user.email} (tokens: {len(tokens)}) for incident {incident.id}")
         except Exception as e:
-            logger.error(f"Failed to send notification to guard {guard_user.email}: {e}")
+            logger.error(f"❌ Failed to send notification to guard {guard_user.email}: {e}", exc_info=True)
 
 
 def find_top_n_nearest_guards(beacon, n=3, exclude_current_beacon=True, available_only=True):
