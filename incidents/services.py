@@ -218,6 +218,12 @@ def get_or_create_incident_with_signals(
     dedup_cutoff = timezone.now() - timedelta(minutes=DEDUP_WINDOW_MINUTES)
     
     with transaction.atomic():
+        # Lock beacon to prevent concurrent incident creation
+        # This ensures only one process can check/create incident for this beacon at a time
+        if not beacon_id.startswith('location:'):
+            # For real beacons, lock the beacon row
+            Beacon.objects.select_for_update().get(id=beacon.id)
+        
         # Lock for atomic operation
         existing_incident = Incident.objects.select_for_update().filter(
             beacon=beacon,

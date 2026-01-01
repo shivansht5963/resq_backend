@@ -128,6 +128,9 @@ def alert_guards_via_beacon_proximity(incident, max_guards=3, alert_type='ASSIGN
     from datetime import timedelta
     
     # 1. Check if incident already has active assignment
+    # Use select_for_update() to lock the incident and prevent concurrent alert generation
+    incident = Incident.objects.select_for_update().get(id=incident.id)
+    
     active_assignment = GuardAssignment.objects.filter(
         incident=incident,
         is_active=True

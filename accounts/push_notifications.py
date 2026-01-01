@@ -153,6 +153,17 @@ class PushNotificationService:
                 if result.get("data"):
                     ticket = result["data"][0] if isinstance(result["data"], list) else result["data"]
                     if ticket.get("status") == "error":
+                        error_details = ticket.get("details", {})
+                        error_code = error_details.get("error")
+                        
+                        # Handle invalid token immediately
+                        if error_code == "DeviceNotRegistered":
+                            logger.warning(f"[PUSH] Device token no longer valid: {expo_token}")
+                            PushNotificationService.handle_invalid_token(expo_token)
+                            log.status = PushNotificationLog.Status.INVALID_TOKEN
+                            log.save()
+                            return False
+                            
                         raise Exception(ticket.get("message", "Expo error"))
                     log.expo_ticket_id = ticket.get("id", "")
                 
