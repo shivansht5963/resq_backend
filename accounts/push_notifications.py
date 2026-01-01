@@ -1,26 +1,24 @@
 """
 Push notification service for Expo push notifications.
 Handles sending notifications to mobile devices via Expo's push API.
+Uses the official exponent_server_sdk for robust notification handling.
 """
 
-import requests
 import logging
 from typing import List, Dict, Any, Optional
-from django.conf import settings
+from exponent_server_sdk import (
+    DeviceNotRegisteredError,
+    PushClient,
+    PushMessage,
+    PushServerError,
+    PushTicketError,
+)
 
 logger = logging.getLogger(__name__)
 
-# Expo push endpoint
-EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
-
-
-class ExpoNotificationError(Exception):
-    """Custom exception for Expo notification errors."""
-    pass
-
 
 class PushNotificationService:
-    """Service to send push notifications via Expo."""
+    """Service to send push notifications via Expo using the official SDK."""
 
     @staticmethod
     def send_notification(
@@ -28,85 +26,112 @@ class PushNotificationService:
         title: str,
         body: str,
         data: Optional[Dict[str, Any]] = None,
-        sound: str = "default"
-    ) -> Dict[str, Any]:
+        sound: str = "default",
+        priority: str = "high"
+    ) -> bool:
         """
         Send a single push notification via Expo.
 
         Args:
-            expo_token: Expo push token
+            expo_token: Expo push token (must start with ExponentPushToken[)
             title: Notification title
             body: Notification body/message
             data: Additional data payload for the mobile app
             sound: Sound to play (default: "default")
+            priority: Notification priority (default, normal, high)
 
         Returns:
-            Response from Expo API
-
-        Raises:
-            ExpoNotificationError: If the notification fails to send
+            bool: True if sent successfully, False otherwise
         """
-        if not expo_token:
-            raise ExpoNotificationError("Expo token is required")
-
-        payload = {
-            "to": expo_token,
-            "sound": sound,
-            "title": title,
-            "body": body,
-        }
-
-        if data:
-            payload["data"] = data
+        if not expo_token or not expo_token.startswith("ExponentPushToken"):
+            logger.warning(f"Invalid or missing Expo token: {expo_token}")
+            return False
 
         try:
-            response = requests.post(EXPO_PUSH_URL, json=payload, timeout=10)
-            response.raise_for_status()
-            result = response.json()
-
-            # Check for errors in Expo response
-            if "errors" in result:
-                logger.error(f"Expo API error: {result['errors']}")
-                raise ExpoNotificationError(f"Expo API error: {result['errors']}")
-
-            return result
-        except requests.exceptions.RequestException as e:
+            message = PushMessage(
+                to=expo_token,
+                title=title,
+                body=body,
+                data=data or {},
+                sound=sound,
+                priority=priority,
+            )
+            
+            response = PushClient().publish(message)
+            response.validate_response()
+            logger.info(f"Push notification sent successfully to {expo_token[:30]}...")
+            return True
+        except DeviceNotRegisteredError:
+            logger.warning(f"Device token no longer registered: {expo_token[:30]}...")
+            return False
+        except PushServerError as e:
+            logger.error(f"Expo server error: {str(e)}")
+            return False
+        except Exception as e:
             logger.error(f"Failed to send notification to {expo_token}: {str(e)}")
-            raise ExpoNotificationError(f"Failed to send notification: {str(e)}")
+            return False
 
     @staticmethod
     def send_batch_notifications(
-        messages: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        tokens_and_messages: List[Dict[str, Any]]
+    ) -> List[bool]:
         """
-        Send multiple push notifications in a single batch request.
+        Send multiple push notifications in a batch.
 
         Args:
-            messages: List of message dicts, each with 'to', 'title', 'body', etc.
+            tokens_and_messages: List of dicts with:
+                - to: Expo push token
+                - title: Notification title
+                - body: Notification body
+                - data: Optional data dict
+                - priority: Optional priority level
 
         Returns:
-            Response from Expo API
-
-        Raises:
-            ExpoNotificationError: If the batch fails to send
+            List of bools indicating success for each notification
         """
+        if not tokens_and_messages:
+            logger.warning("No messages provided for batch send")
+            return []
+
+        # Filter and build valid messages
+        messages = []
+        for msg in tokens_and_messages:
+            token = msg.get("to")
+            if token and token.startswith("ExponentPushToken"):
+                try:
+                    push_msg = PushMessage(
+                        to=token,
+                        title=msg.get("title", ""),
+                        body=msg.get("body", ""),
+                        data=msg.get("data", {}),
+                        sound=msg.get("sound", "default"),
+                        priority=msg.get("priority", "high"),
+                    )
+                    messages.append(push_msg)
+                except Exception as e:
+                    logger.error(f"Invalid message format: {str(e)}")
+            else:
+                logger.warning(f"Invalid token in batch: {token}")
+
         if not messages:
-            raise ExpoNotificationError("At least one message is required")
+            logger.warning("No valid messages to send")
+            return []
 
         try:
-            response = requests.post(EXPO_PUSH_URL, json=messages, timeout=30)
-            response.raise_for_status()
-            result = response.json()
-
-            # Check for errors in Expo response
-            if "errors" in result:
-                logger.error(f"Expo batch API error: {result['errors']}")
-                raise ExpoNotificationError(f"Expo batch API error: {result['errors']}")
-
-            return result
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to send batch notifications: {str(e)}")
-            raise ExpoNotificationError(f"Failed to send batch notifications: {str(e)}")
+            responses = PushClient().publish_multiple(messages)
+            results = []
+            for idx, response in enumerate(responses):
+                try:
+                    response.validate_response()
+                    results.append(True)
+                    logger.info(f"Batch message {idx + 1} sent successfully")
+                except (PushTicketError, PushServerError) as e:
+                    logger.warning(f"Batch message {idx + 1} failed: {str(e)}")
+                    results.append(False)
+            return results
+        except PushServerError as e:
+            logger.error(f"Batch push failed: {str(e)}")
+            return [False] * len(messages)
 
     @staticmethod
     def notify_guard_alert(
@@ -134,30 +159,31 @@ class PushNotificationService:
             message = {
                 "to": token,
                 "sound": "default",
-                "title": "Incoming Alert",
+                "title": "🚨 Incoming Alert",
                 "body": f"{priority} - {location}",
                 "data": {
                     "type": "GUARD_ALERT",
                     "incident_id": str(incident_id),
-                    "alert_id": alert_id,
+                    "alert_id": str(alert_id),
                     "priority": priority,
                     "location": location,
                 },
+                "priority": "high",
             }
             messages.append(message)
 
-        try:
-            if len(messages) == 1:
-                PushNotificationService.send_notification(
-                    expo_tokens[0],
-                    "Incoming Alert",
-                    f"{priority} - {location}",
-                    messages[0].get("data"),
-                )
-            else:
-                PushNotificationService.send_batch_notifications(messages)
-        except ExpoNotificationError as e:
-            logger.error(f"Failed to send guard alert notifications: {e}")
+        if len(messages) == 1:
+            PushNotificationService.send_notification(
+                expo_tokens[0],
+                "🚨 Incoming Alert",
+                f"{priority} - {location}",
+                messages[0].get("data"),
+                priority="high",
+            )
+        else:
+            results = PushNotificationService.send_batch_notifications(messages)
+            sent_count = sum(1 for r in results if r)
+            logger.info(f"Guard alerts: {sent_count}/{len(messages)} sent successfully")
 
     @staticmethod
     def notify_assignment_confirmed(
@@ -179,27 +205,27 @@ class PushNotificationService:
             message = {
                 "to": token,
                 "sound": "default",
-                "title": "Assignment Confirmed",
+                "title": "✅ Assignment Confirmed",
                 "body": "You are assigned to an incident",
                 "data": {
                     "type": "ASSIGNMENT_CONFIRMED",
                     "incident_id": str(incident_id),
                 },
+                "priority": "high",
             }
             messages.append(message)
 
-        try:
-            if len(messages) == 1:
-                PushNotificationService.send_notification(
-                    expo_tokens[0],
-                    "Assignment Confirmed",
-                    "You are assigned to an incident",
-                    messages[0].get("data"),
-                )
-            else:
-                PushNotificationService.send_batch_notifications(messages)
-        except ExpoNotificationError as e:
-            logger.error(f"Failed to send assignment confirmed notifications: {e}")
+        if len(messages) == 1:
+            PushNotificationService.send_notification(
+                expo_tokens[0],
+                "✅ Assignment Confirmed",
+                "You are assigned to an incident",
+                messages[0].get("data"),
+            )
+        else:
+            results = PushNotificationService.send_batch_notifications(messages)
+            sent_count = sum(1 for r in results if r)
+            logger.info(f"Assignment confirmations: {sent_count}/{len(messages)} sent")
 
     @staticmethod
     def notify_new_chat_message(
@@ -223,32 +249,33 @@ class PushNotificationService:
             return
 
         messages = []
+        preview = message_preview[:50] if message_preview else "(no message)"
         for token in expo_tokens:
             message = {
                 "to": token,
                 "sound": "default",
-                "title": "New Chat Message",
-                "body": f"{sender_name}: {message_preview[:50]}",
+                "title": "💬 New Message",
+                "body": f"{sender_name}: {preview}",
                 "data": {
                     "type": "NEW_CHAT_MESSAGE",
                     "incident_id": str(incident_id),
-                    "conversation_id": conversation_id,
+                    "conversation_id": str(conversation_id),
+                    "sender": sender_name,
                 },
             }
             messages.append(message)
 
-        try:
-            if len(messages) == 1:
-                PushNotificationService.send_notification(
-                    expo_tokens[0],
-                    "New Chat Message",
-                    f"{sender_name}: {message_preview[:50]}",
-                    messages[0].get("data"),
-                )
-            else:
-                PushNotificationService.send_batch_notifications(messages)
-        except ExpoNotificationError as e:
-            logger.error(f"Failed to send chat message notifications: {e}")
+        if len(messages) == 1:
+            PushNotificationService.send_notification(
+                expo_tokens[0],
+                "💬 New Message",
+                f"{sender_name}: {preview}",
+                messages[0].get("data"),
+            )
+        else:
+            results = PushNotificationService.send_batch_notifications(messages)
+            sent_count = sum(1 for r in results if r)
+            logger.info(f"Chat messages: {sent_count}/{len(messages)} sent")
 
     @staticmethod
     def notify_incident_escalated(
@@ -272,28 +299,29 @@ class PushNotificationService:
             message = {
                 "to": token,
                 "sound": "default",
-                "title": "Incident Escalated",
+                "title": "⚠️ Incident Escalated",
                 "body": f"Priority raised to {new_priority}",
                 "data": {
                     "type": "INCIDENT_ESCALATED",
                     "incident_id": str(incident_id),
                     "new_priority": new_priority,
                 },
+                "priority": "high",
             }
             messages.append(message)
 
-        try:
-            if len(messages) == 1:
-                PushNotificationService.send_notification(
-                    expo_tokens[0],
-                    "Incident Escalated",
-                    f"Priority raised to {new_priority}",
-                    messages[0].get("data"),
-                )
-            else:
-                PushNotificationService.send_batch_notifications(messages)
-        except ExpoNotificationError as e:
-            logger.error(f"Failed to send incident escalated notifications: {e}")
+        if len(messages) == 1:
+            PushNotificationService.send_notification(
+                expo_tokens[0],
+                "⚠️ Incident Escalated",
+                f"Priority raised to {new_priority}",
+                messages[0].get("data"),
+                priority="high",
+            )
+        else:
+            results = PushNotificationService.send_batch_notifications(messages)
+            sent_count = sum(1 for r in results if r)
+            logger.info(f"Escalation notifications: {sent_count}/{len(messages)} sent")
 
     @staticmethod
     def get_guard_tokens(user) -> List[str]:
