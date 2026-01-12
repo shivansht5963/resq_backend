@@ -425,6 +425,7 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
     - GuardAlert tracking field updates
     
     Also logs ALERT_SENT event for each notification.
+    Includes incident image URLs in notification data for mobile app to display.
     
     Args:
         incident: Incident instance
@@ -461,14 +462,29 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
                 fail_count += 1
                 continue
             
+            # Get incident images if available
+            images = incident.images.all().order_by('uploaded_at')
+            image_urls = []
+            if images.exists():
+                # Get first image to include in push notification
+                # Full list of images will be available in the incident details API
+                image_urls = [
+                    img.image.url for img in images[:3]  # Include first 3 images
+                ]
+            
             # Send notification with logging and retry
             notification_data = {
                 "type": "GUARD_ALERT",
                 "incident_id": str(incident.id),
                 "alert_id": str(alert.id),
                 "priority": priority_name,
-                "location": location
+                "location": location,
+                "image_count": incident.images.count(),
             }
+            
+            # Add image URLs if available
+            if image_urls:
+                notification_data["images"] = image_urls
             
             # Send to each token (usually one per device)
             token_success = False
@@ -496,11 +512,12 @@ def send_push_notifications_for_alerts(incident, guard_alerts):
                     details={
                         'alert_id': alert.id,
                         'priority_rank': alert.priority_rank,
-                        'tokens_count': len(tokens)
+                        'tokens_count': len(tokens),
+                        'images_sent': len(image_urls)
                     }
                 )
                 success_count += 1
-                logger.info(f"✅ Sent push to guard {guard_user.email} for incident {str(incident.id)[:8]}")
+                logger.info(f"✅ Sent push to guard {guard_user.email} for incident {str(incident.id)[:8]} with {len(image_urls)} images")
             else:
                 # Log failure event
                 log_incident_event(

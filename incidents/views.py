@@ -53,14 +53,14 @@ class IncidentViewSet(viewsets.ModelViewSet):
         if user.role == 'STUDENT':
             return Incident.objects.filter(
                 signals__source_user=user
-            ).distinct().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
+            ).distinct().prefetch_related('signals', 'images', 'guard_assignments', 'guard_alerts', 'conversation__messages')
         
         # Guards see all incidents (for their location/nearby)
         if user.role == 'GUARD':
-            return Incident.objects.all().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
+            return Incident.objects.all().prefetch_related('signals', 'images', 'guard_assignments', 'guard_alerts', 'conversation__messages')
         
         # Admins see all
-        return Incident.objects.all().prefetch_related('signals', 'guard_assignments', 'conversation__messages')
+        return Incident.objects.all().prefetch_related('signals', 'images', 'guard_assignments', 'guard_alerts', 'conversation__messages')
     
     def get_serializer_class(self):
         if self.action == 'retrieve':

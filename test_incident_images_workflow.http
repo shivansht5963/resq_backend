@@ -1,0 +1,604 @@
+### ============================================================================
+### INCIDENT IMAGES API - COMPLETE TEST WORKFLOW
+### ============================================================================
+### This file provides step-by-step testing for incident creation with images
+### and full guard/student workflow
+### 
+### REQUIREMENTS:
+### - VS Code REST Client extension installed
+### - Update tokens below before running tests
+### ============================================================================
+
+###############################################
+### CONFIGURATION SECTION - UPDATE THESE!
+###############################################
+
+# API Base URL (Production)
+@baseUrl = https://resq-server.onrender.com/api
+
+# Local Development (uncomment to use local)
+# @baseUrl = http://localhost:8000/api
+
+# TOKENS - Get these from login responses
+@studentToken = YOUR_STUDENT_TOKEN_HERE
+@guardToken = YOUR_GUARD_TOKEN_HERE
+@adminToken = YOUR_ADMIN_TOKEN_HERE
+
+# Credentials for login (if tokens expired)
+@studentEmail = test_student@example.com
+@studentPassword = GoogleAC12%
+
+@guardEmail = gtest3@test.com
+@guardPassword = GoogleAC12%
+
+@adminEmail = admin@example.com
+@adminPassword = admin123
+
+# IDs - Will be populated during tests
+@studentUserId = 
+@guardUserId = 
+
+# DATA IDs - Get from responses
+@beaconId = 
+@incidentId = 
+@alertId = 
+
+###############################################
+### PHASE 1: AUTHENTICATION & SETUP
+###############################################
+
+### [1.0] LOGIN STUDENT
+### IMPORTANT: Copy the "token" from response and update @studentToken above
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "{{studentEmail}}",
+  "password": "{{studentPassword}}"
+}
+
+###
+
+### [1.1] LOGIN GUARD
+### IMPORTANT: Copy the "token" from response and update @guardToken above
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "{{guardEmail}}",
+  "password": "{{guardPassword}}"
+}
+
+###
+
+### [1.2] GET STUDENT PROFILE
+GET {{baseUrl}}/accounts/me/
+Authorization: Token {{studentToken}}
+
+###
+
+### [1.3] GET GUARD PROFILE
+GET {{baseUrl}}/accounts/me/
+Authorization: Token {{guardToken}}
+
+###
+
+### [1.4] LIST ALL BEACONS
+### IMPORTANT: Copy a beacon ID and update @beaconId above
+GET {{baseUrl}}/beacons/
+Authorization: Token {{studentToken}}
+
+###############################################
+### PHASE 2: CREATE INCIDENT WITH IMAGES
+###############################################
+
+### [2.0] REPORT SOS (Quick - without images, for testing)
+### This creates an incident quickly
+POST {{baseUrl}}/incidents/report_sos/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "beacon_id": "{{beaconId}}",
+  "description": "Emergency at main entrance"
+}
+
+###
+### Response contains:
+### - incident_id: Copy this and update @incidentId above
+### - incident: Full incident details including empty images array
+
+###
+
+### [2.1] REPORT INCIDENT WITH IMAGES (Preferred for full testing)
+### This endpoint allows multipart upload with images
+###
+### HOW TO USE:
+### 1. Replace {{beaconId}} with actual beacon ID from [1.4]
+### 2. Uncomment the image file section and point to actual image files
+### 3. Click "Send Request" to upload
+###
+POST {{baseUrl}}/incidents/report/
+Content-Type: multipart/form-data; boundary=----FormBoundary7MA4YWxkTrZu0gW
+Authorization: Token {{studentToken}}
+
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+{{beaconId}}
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="type"
+
+Safety Concern
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Found suspicious equipment near library. Requires immediate inspection.
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="location"
+
+Library Building Entrance
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="photo_001.jpg"
+Content-Type: image/jpeg
+
+< ./media/incidents/sample_image.jpg
+------FormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="photo_002.jpg"
+Content-Type: image/jpeg
+
+< ./media/incidents/sample_image.jpg
+------FormBoundary7MA4YWxkTrZu0gW--
+
+###
+### Response contains:
+### - incident_id: Full UUID of created incident
+### - images: Array of uploaded images with URLs
+### - incident: Complete incident with all details
+
+###############################################
+### PHASE 3: STUDENT - VIEW INCIDENT WITH IMAGES
+###############################################
+
+### [3.0] GET INCIDENT DETAILS (View all images)
+### IMPORTANT: Replace {{incidentId}} with ID from [2.0] or [2.1] response
+###
+### Response includes:
+### - images array with:
+###   - id: Image database ID
+###   - image: Absolute HTTPS URL to image
+###   - uploaded_by_email: Who uploaded it
+###   - uploaded_by_name: Uploader full name
+###   - uploaded_at: Timestamp
+###   - description: Caption
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{studentToken}}
+
+###
+
+### [3.1] LIST MY INCIDENTS (With image counts)
+### Shows all incidents I'm involved in
+### Each incident includes "image_count" field
+###
+GET {{baseUrl}}/incidents/
+Authorization: Token {{studentToken}}
+
+###
+
+### [3.2] GET IMAGES FOR SPECIFIC INCIDENT
+### Alternative endpoint to list just images
+###
+GET {{baseUrl}}/incident-images/?incident={{incidentId}}
+Authorization: Token {{studentToken}}
+
+###############################################
+### PHASE 4: GUARD - VIEW INCIDENT & ACCEPT ALERT
+###############################################
+
+### [4.0] GUARD: VIEW ALL INCIDENTS
+### Guards can see all incidents for awareness/assignment
+###
+GET {{baseUrl}}/incidents/
+Authorization: Token {{guardToken}}
+
+###
+
+### [4.1] GUARD: VIEW INCIDENT WITH IMAGES
+### Important: See all student-uploaded images
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{guardToken}}
+
+###
+### Response shows:
+### - Full incident details
+### - All images uploaded by students
+### - Guard assignment info
+### - Alert information
+###
+
+### [4.2] GET GUARD ALERTS
+### Shows alerts sent to this guard
+###
+GET {{baseUrl}}/guard-alerts/
+Authorization: Token {{guardToken}}
+
+###
+
+### [4.3] GUARD: VIEW SPECIFIC ALERT
+### IMPORTANT: Replace {{alertId}} with alert ID from [4.2]
+###
+GET {{baseUrl}}/guard-alerts/{{alertId}}/
+Authorization: Token {{guardToken}}
+
+###
+### Response includes:
+### - incident_id: Link to the incident
+### - status: PENDING, ACCEPTED, DECLINED, etc.
+### - alert_sent_at: When alert was sent to guard
+###
+
+### [4.4] GUARD: ACCEPT ALERT
+### Guard acknowledges the alert
+###
+PATCH {{baseUrl}}/guard-alerts/{{alertId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "ACCEPTED"
+}
+
+###
+
+### [4.5] GUARD: DECLINE ALERT
+### Guard declines to handle this incident
+###
+PATCH {{baseUrl}}/guard-alerts/{{alertId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "DECLINED",
+  "decline_reason": "Already handling another incident"
+}
+
+###############################################
+### PHASE 5: GUARD ASSIGNMENT
+###############################################
+
+### [5.0] ASSIGN GUARD TO INCIDENT (Admin only)
+### Creates a formal assignment
+###
+POST {{baseUrl}}/guard-assignments/
+Content-Type: application/json
+Authorization: Token {{adminToken}}
+
+{
+  "incident_id": "{{incidentId}}",
+  "guard_id": {{guardUserId}},
+  "status": "ASSIGNED"
+}
+
+###
+
+### [5.1] GET GUARD ASSIGNMENTS
+### Shows all assignments for this guard
+###
+GET {{baseUrl}}/guard-assignments/?guard={{guardUserId}}
+Authorization: Token {{guardToken}}
+
+###
+
+### [5.2] UPDATE ASSIGNMENT STATUS
+### Guard updates assignment progress
+###
+PATCH {{baseUrl}}/guard-assignments/1/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "IN_PROGRESS"
+}
+
+###############################################
+### PHASE 6: INCIDENT RESOLUTION
+###############################################
+
+### [6.0] RESOLVE INCIDENT
+### Guard marks incident as resolved with notes
+###
+POST {{baseUrl}}/incidents/{{incidentId}}/resolve/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "resolution_notes": "Area investigated thoroughly. No security threats found. All equipment checked and secured.",
+  "resolution_type": "RESOLVED_BY_GUARD"
+}
+
+###
+
+### [6.1] UPDATE INCIDENT PRIORITY
+### Escalate or downgrade incident importance
+###
+PATCH {{baseUrl}}/incidents/{{incidentId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "priority": 3,
+  "status": "IN_PROGRESS"
+}
+
+###############################################
+### PHASE 7: STUDENT - CHAT WITH GUARD
+###############################################
+
+### [7.0] GET INCIDENT CONVERSATION
+### See chat messages in incident
+###
+GET {{baseUrl}}/conversations/{{conversationId}}/
+Authorization: Token {{studentToken}}
+
+###
+
+### [7.1] SEND MESSAGE IN CONVERSATION
+###
+POST {{baseUrl}}/conversations/{{conversationId}}/messages/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "message_text": "The situation appears to be resolved now. Thank you for the quick response!"
+}
+
+###
+
+### [7.2] GUARD: SEND MESSAGE IN CONVERSATION
+###
+POST {{baseUrl}}/conversations/{{conversationId}}/messages/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "message_text": "Area is secure now. We have removed the suspicious item and contacted facilities."
+}
+
+###############################################
+### VERIFICATION & TESTING SECTION
+###############################################
+
+### [V1] VERIFY IMAGES IN RESPONSE
+### IMPORTANT TEST: Check that incident details include images array
+### Expected response structure:
+### {
+###   "id": "incident-uuid",
+###   "images": [
+###     {
+###       "id": 1,
+###       "image": "https://storage.googleapis.com/...",
+###       "uploaded_by_email": "student@example.com",
+###       "uploaded_by_name": "Student Name",
+###       "uploaded_at": "2026-01-12T20:19:08+05:30",
+###       "description": "Image description"
+###     }
+###   ]
+### }
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{studentToken}}
+
+###
+
+### [V2] VERIFY IMAGE URLS ARE ABSOLUTE
+### Images in response should have complete HTTPS URLs
+### ✓ URL should start with https://storage.googleapis.com/
+### ✓ NOT relative paths like /media/incidents/...
+### ✓ Accessible directly from browser
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{guardToken}}
+
+###
+
+### [V3] VERIFY IMAGE COUNT IN LIST
+### List endpoint should include image_count field
+### Expected:
+### {
+###   "results": [
+###     {
+###       "id": "uuid",
+###       "image_count": 2,
+###       ...
+###     }
+###   ]
+### }
+###
+GET {{baseUrl}}/incidents/?limit=10
+Authorization: Token {{studentToken}}
+
+###
+
+### [V4] VERIFY ALL IMAGES VISIBLE TO GUARD
+### Guard should see all images uploaded by students
+### Should match student's images from [V1]
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{guardToken}}
+
+###
+
+### [V5] VERIFY PUSH NOTIFICATION INCLUDED IMAGES
+### Check push notification logs to confirm images were sent
+###
+GET {{baseUrl}}/push-notifications/logs/?incident={{incidentId}}
+Authorization: Token {{adminToken}}
+
+###############################################
+### PUSH NOTIFICATION TESTING
+###############################################
+
+### [P1] REGISTER EXPO DEVICE TOKEN (Student)
+### Mobile app needs to register to receive push notifications
+### Get token from Expo SDK: getExpoPushTokenAsync()
+###
+POST {{baseUrl}}/devices/register/
+Content-Type: application/json
+Authorization: Token {{studentToken}}
+
+{
+  "expo_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxx]",
+  "device_type": "IOS",
+  "device_name": "iPhone 14"
+}
+
+###
+
+### [P2] REGISTER EXPO DEVICE TOKEN (Guard)
+###
+POST {{baseUrl}}/devices/register/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "expo_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxx]",
+  "device_type": "ANDROID",
+  "device_name": "Pixel 6"
+}
+
+###
+
+### [P3] VIEW DEVICE TOKENS
+GET {{baseUrl}}/devices/
+Authorization: Token {{guardToken}}
+
+###
+
+### [P4] CHECK PUSH NOTIFICATION LOGS
+### See which push notifications were sent and their status
+###
+GET {{baseUrl}}/push-notifications/logs/?limit=50
+Authorization: Token {{adminToken}}
+
+###
+
+### [P5] CHECK PUSH NOTIFICATIONS FOR SPECIFIC INCIDENT
+###
+GET {{baseUrl}}/push-notifications/logs/?incident={{incidentId}}&limit=20
+Authorization: Token {{adminToken}}
+
+###############################################
+### ADMIN OPERATIONS
+###############################################
+
+### [A1] ADMIN: VIEW ALL INCIDENTS
+###
+GET {{baseUrl}}/incidents/?limit=100
+Authorization: Token {{adminToken}}
+
+###
+
+### [A2] ADMIN: FILTER BY STATUS
+###
+GET {{baseUrl}}/incidents/?status=CREATED&limit=50
+Authorization: Token {{adminToken}}
+
+###
+
+### [A3] ADMIN: FILTER BY PRIORITY
+###
+GET {{baseUrl}}/incidents/?priority=4&limit=50
+Authorization: Token {{adminToken}}
+
+###
+
+### [A4] ADMIN: CREATE INCIDENT (Bypass flow)
+###
+POST {{baseUrl}}/incidents/
+Content-Type: application/json
+Authorization: Token {{adminToken}}
+
+{
+  "beacon_id": "{{beaconId}}",
+  "status": "CREATED",
+  "priority": 3,
+  "description": "Admin-created test incident",
+  "report_type": "Manual Entry"
+}
+
+###
+
+### [A5] ADMIN: VIEW INCIDENT AUDIT TRAIL
+### See all events/changes for an incident
+###
+GET {{baseUrl}}/incidents/{{incidentId}}/events/
+Authorization: Token {{adminToken}}
+
+###
+
+### [A6] ADMIN: VIEW PUSH NOTIFICATION STATS
+###
+GET {{baseUrl}}/push-notifications/logs/?status=SENT&limit=100
+Authorization: Token {{adminToken}}
+
+###############################################
+### TROUBLESHOOTING
+###############################################
+
+### [T1] CHECK API HEALTH
+###
+GET {{baseUrl}}/health/
+Authorization: Token {{studentToken}}
+
+###
+
+### [T2] LIST BEACONS (If @beaconId not set)
+###
+GET {{baseUrl}}/beacons/
+Authorization: Token {{studentToken}}
+
+###
+
+### [T3] GET SPECIFIC BEACON
+###
+GET {{baseUrl}}/beacons/{{beaconId}}/
+Authorization: Token {{studentToken}}
+
+###
+
+### [T4] CHECK IF TOKEN IS VALID
+###
+GET {{baseUrl}}/accounts/me/
+Authorization: Token {{studentToken}}
+
+###
+
+### [T5] LIST ALL INCIDENTS (For finding IDs)
+###
+GET {{baseUrl}}/incidents/?limit=100
+Authorization: Token {{studentToken}}
+
+###
+
+### [T6] LOGOUT (Invalidate token)
+###
+POST {{baseUrl}}/auth/logout/
+Authorization: Token {{studentToken}}
+
+###############################################
+### QUICK START CHECKLIST
+###############################################
+
+# ☐ Step 1: Login student [1.0] - Copy token to @studentToken
+# ☐ Step 2: Login guard [1.1] - Copy token to @guardToken
+# ☐ Step 3: Get beacons [1.4] - Copy beacon ID to @beaconId
+# ☐ Step 4: Create incident with images [2.1]
+# ☐ Step 5: Copy incident ID to @incidentId
+# ☐ Step 6: View incident [3.0] - Verify images are in response
+# ☐ Step 7: Guard views incident [4.1] - Verify guard sees images
+# ☐ Step 8: Guard accepts alert [4.4]
+# ☐ Step 9: Guard resolves incident [6.0]
+# ☐ Step 10: Verify images in response [V1] - All tests should pass
+

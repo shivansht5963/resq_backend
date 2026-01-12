@@ -1,0 +1,605 @@
+### GUARD VIEW - INCIDENT DETAILS WITH IMAGES
+### Complete API reference and frontend rendering guide
+### For displaying incidents with all student-uploaded images
+
+###############################################
+### GUARD CONFIGURATION
+###############################################
+
+@baseUrl = http://localhost:8000/api
+@guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
+@guardEmail = gtest3@test.com
+@guardPassword = GoogleAC12%
+
+# Set these after responses
+@incidentId = 
+@alertId = 
+@conversationId = 
+@guardId = 8
+
+###############################################
+### STEP 1: GUARD LOGIN
+###############################################
+
+### [G1.0] LOGIN GUARD - Get Token
+POST {{baseUrl}}/auth/login/
+Content-Type: application/json
+
+{
+  "email": "{{guardEmail}}",
+  "password": "{{guardPassword}}"
+}
+
+# Copy "token" from response to @guardToken above
+
+### [G1.1] GET GUARD PROFILE
+GET {{baseUrl}}/accounts/me/
+Authorization: Token {{guardToken}}
+
+###############################################
+### STEP 2: GUARD VIEWS ALL INCIDENTS (List)
+###############################################
+
+### [G2.0] GET ALL INCIDENTS WITH IMAGE COUNT
+### Guards see all incidents for awareness
+### Each incident shows how many images are attached
+GET {{baseUrl}}/incidents/?limit=20
+Authorization: Token {{guardToken}}
+
+# RESPONSE:
+# {
+#   "count": 15,
+#   "results": [
+#     {
+#       "id": "550e8400-e29b-41d4-a716-446655440000",
+#       "status": "CREATED",
+#       "priority": 3,
+#       "image_count": 2,          ← IMAGES AVAILABLE
+#       "signal_count": 1,
+#       "created_at": "2026-01-12T20:15:00+05:30"
+#     }
+#   ]
+# }
+#
+# FRONTEND RENDERING (React):
+# <div className="incident-list">
+#   {incidents.map(incident => (
+#     <div key={incident.id} className="incident-card">
+#       <h3>{incident.status}</h3>
+#       <p>Priority: {incident.priority}</p>
+#       {incident.image_count > 0 && (
+#         <span className="badge">{incident.image_count} 📸 images</span>
+#       )}
+#       <button onClick={() => viewDetails(incident.id)}>
+#         View Details & Images
+#       </button>
+#     </div>
+#   ))}
+# </div>
+
+###############################################
+### STEP 3: GUARD VIEWS INCIDENT WITH ALL IMAGES
+###############################################
+
+### [G3.0] GET INCIDENT FULL DETAILS WITH IMAGES
+### CRITICAL: All student-uploaded images are in response
+### Copy incident ID from [G2.0] response and update @incidentId above
+GET {{baseUrl}}/incidents/{{incidentId}}/
+Authorization: Token {{guardToken}}
+
+# COMPLETE RESPONSE WITH IMAGES:
+# {
+#   "id": "550e8400-e29b-41d4-a716-446655440000",
+#   "beacon": {
+#     "id": "ab907856-3412-3412-3412-341278563412",
+#     "location_name": "Library Entrance",
+#     "building": "Building A",
+#     "floor": 3,
+#     "latitude": 40.7128,
+#     "longitude": -74.0060
+#   },
+#   "status": "CREATED",
+#   "priority": 3,
+#   "description": "Suspicious activity at building entrance",
+#   "report_type": "Safety Concern",
+#   "location": "Library Building, Ground Floor",
+#   "first_signal_time": "2026-01-12T20:15:00+05:30",
+#   "last_signal_time": "2026-01-12T20:15:00+05:30",
+#   
+#   "images": [                    ← ALL STUDENT IMAGES
+#     {
+#       "id": 22,
+#       "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/12/photo_1.jpg",
+#       "uploaded_by_email": "student@example.com",
+#       "uploaded_by_name": "John Doe",
+#       "uploaded_at": "2026-01-12T20:15:30+05:30",
+#       "description": "Front entrance view"
+#     },
+#     {
+#       "id": 23,
+#       "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/12/photo_2.jpg",
+#       "uploaded_by_email": "student@example.com",
+#       "uploaded_by_name": "John Doe",
+#       "uploaded_at": "2026-01-12T20:15:45+05:30",
+#       "description": "Side view of suspicious item"
+#     }
+#   ],
+#   
+#   "signals": [
+#     {
+#       "id": 60,
+#       "signal_type": "STUDENT_REPORT",
+#       "source_user": {...},
+#       "details": {}
+#     }
+#   ],
+#   
+#   "guard_assignment": {
+#     "id": 1,
+#     "guard_name": "John Smith",
+#     "assigned_at": "2026-01-12T20:16:00+05:30"
+#   },
+#   
+#   "guard_alerts": [
+#     {
+#       "id": 1,
+#       "guard": {
+#         "id": "uuid",
+#         "full_name": "John Smith"
+#       },
+#       "status": "PENDING",
+#       "distance_km": 0.5,
+#       "priority_rank": 1,
+#       "alert_sent_at": "2026-01-12T20:15:05+05:30"
+#     }
+#   ]
+# }
+
+###############################################
+### STEP 4: GUARD VIEWS ALERTS
+###############################################
+
+### [G4.0] GET ALL ALERTS FOR THIS GUARD
+GET {{baseUrl}}/guard-alerts/
+Authorization: Token {{guardToken}}
+
+# RESPONSE:
+# {
+#   "count": 3,
+#   "results": [
+#     {
+#       "id": 1,
+#       "incident_id": "550e8400-e29b-41d4-a716-446655440000",
+#       "guard": {...},
+#       "status": "PENDING",
+#       "distance_km": 0.5,
+#       "priority_rank": 1,
+#       "alert_sent_at": "2026-01-12T20:15:05+05:30"
+#     }
+#   ]
+# }
+
+### [G4.1] GET SPECIFIC ALERT
+### Copy alert ID from [G4.0] response to @alertId
+GET {{baseUrl}}/guard-alerts/{{alertId}}/
+Authorization: Token {{guardToken}}
+
+###############################################
+### STEP 5: GUARD ACCEPTS/RESPONDS TO ALERT
+###############################################
+
+### [G5.0] GUARD ACCEPTS ALERT
+PATCH {{baseUrl}}/guard-alerts/{{alertId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "ACCEPTED"
+}
+
+# After accepting, guard can view full incident with images
+
+### [G5.1] GUARD DECLINES ALERT
+PATCH {{baseUrl}}/guard-alerts/{{alertId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "DECLINED",
+  "decline_reason": "Already handling another incident"
+}
+
+###############################################
+### STEP 6: GUARD GETS ASSIGNMENT
+###############################################
+
+### [G6.0] GET MY ACTIVE ASSIGNMENTS
+GET {{baseUrl}}/guard-assignments/?guard={{guardId}}
+Authorization: Token {{guardToken}}
+
+###############################################
+### STEP 7: GUARD UPDATES INCIDENT STATUS
+###############################################
+
+### [G7.0] UPDATE INCIDENT STATUS TO IN_PROGRESS
+PATCH {{baseUrl}}/incidents/{{incidentId}}/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "status": "IN_PROGRESS",
+  "priority": 3
+}
+
+###############################################
+### STEP 8: GUARD RESOLVES INCIDENT
+###############################################
+
+### [G8.0] RESOLVE INCIDENT WITH NOTES
+POST {{baseUrl}}/incidents/{{incidentId}}/resolve/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "resolution_notes": "Investigated area thoroughly. Found discarded backpack near entrance. Item removed and reported to facilities. Area secured.",
+  "resolution_type": "RESOLVED_BY_GUARD"
+}
+
+###############################################
+### STEP 9: GUARD SENDS MESSAGE
+###############################################
+
+### [G9.0] GET CONVERSATION FOR INCIDENT
+GET {{baseUrl}}/conversations/{{conversationId}}/
+Authorization: Token {{guardToken}}
+
+### [G9.1] SEND MESSAGE TO STUDENT
+POST {{baseUrl}}/conversations/{{conversationId}}/messages/
+Content-Type: application/json
+Authorization: Token {{guardToken}}
+
+{
+  "message_text": "We have secured the area. The suspicious item has been removed and reported to facilities. Area is now safe."
+}
+
+###############################################
+### FRONTEND - HOW TO RENDER GUARD VIEW
+###############################################
+
+# ============================================================
+# GUARD INCIDENT LIST VIEW (With Image Count)
+# ============================================================
+# 
+# import React, { useState, useEffect } from 'react';
+# 
+# function GuardIncidentList() {
+#   const [incidents, setIncidents] = useState([]);
+#   const [loading, setLoading] = useState(true);
+# 
+#   useEffect(() => {
+#     fetch('/api/incidents/', {
+#       headers: { Authorization: `Token ${guardToken}` }
+#     })
+#     .then(r => r.json())
+#     .then(data => {
+#       setIncidents(data.results);
+#       setLoading(false);
+#     });
+#   }, []);
+# 
+#   if (loading) return <p>Loading incidents...</p>;
+# 
+#   return (
+#     <div className="incident-list">
+#       <h2>Active Incidents</h2>
+#       {incidents.map(incident => (
+#         <div key={incident.id} className="incident-card" onClick={() => goToDetails(incident.id)}>
+#           <div className="header">
+#             <span className={`status ${incident.status.toLowerCase()}`}>{incident.status}</span>
+#             <span className={`priority p${incident.priority}`}>Priority {incident.priority}</span>
+#           </div>
+#           
+#           <div className="content">
+#             <p>{incident.beacon.location_name} - {incident.beacon.building}</p>
+#             <p>{incident.description.substring(0, 100)}...</p>
+#           </div>
+#           
+#           {/* IMAGE COUNT BADGE */}
+#           {incident.image_count > 0 && (
+#             <div className="image-badge">
+#               📸 {incident.image_count} {incident.image_count === 1 ? 'image' : 'images'}
+#             </div>
+#           )}
+#           
+#           <div className="footer">
+#             <small>{incident.signal_count} signal(s)</small>
+#             <button>View Details</button>
+#           </div>
+#         </div>
+#       ))}
+#     </div>
+#   );
+# }
+
+# ============================================================
+# GUARD INCIDENT DETAIL VIEW (With Images Gallery)
+# ============================================================
+# 
+# import React, { useState, useEffect } from 'react';
+# import ImageCarousel from './ImageCarousel';
+# 
+# function GuardIncidentDetail({ incidentId }) {
+#   const [incident, setIncident] = useState(null);
+#   const [loading, setLoading] = useState(true);
+#   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+# 
+#   useEffect(() => {
+#     fetch(`/api/incidents/${incidentId}/`, {
+#       headers: { Authorization: `Token ${guardToken}` }
+#     })
+#     .then(r => r.json())
+#     .then(data => {
+#       setIncident(data);
+#       setLoading(false);
+#     });
+#   }, [incidentId]);
+# 
+#   if (loading) return <div>Loading incident details...</div>;
+#   if (!incident) return <div>Incident not found</div>;
+# 
+#   return (
+#     <div className="incident-detail">
+#       {/* HEADER */}
+#       <div className="detail-header">
+#         <h1>{incident.status}</h1>
+#         <div className="badges">
+#           <span className="priority">Priority: {incident.priority}</span>
+#           <span className="location">{incident.beacon.location_name}</span>
+#         </div>
+#       </div>
+# 
+#       {/* MAIN CONTENT */}
+#       <div className="detail-content">
+#         {/* INCIDENT INFO */}
+#         <div className="incident-info">
+#           <h3>Incident Details</h3>
+#           <p><strong>Description:</strong> {incident.description}</p>
+#           <p><strong>Report Type:</strong> {incident.report_type}</p>
+#           <p><strong>Location:</strong> {incident.location || incident.beacon.location_name}</p>
+#           <p><strong>Building:</strong> {incident.beacon.building}, Floor {incident.beacon.floor}</p>
+#         </div>
+# 
+#         {/* IMAGES SECTION - CRITICAL */}
+#         {incident.images && incident.images.length > 0 ? (
+#           <div className="images-section">
+#             <h3>📸 Evidence Images ({incident.images.length})</h3>
+#             
+#             {/* IMAGE CAROUSEL */}
+#             <div className="image-carousel">
+#               <img 
+#                 src={incident.images[selectedImageIndex].image}
+#                 alt={incident.images[selectedImageIndex].description}
+#                 className="main-image"
+#               />
+#               
+#               {/* IMAGE INFO */}
+#               <div className="image-info">
+#                 <p className="description">
+#                   {incident.images[selectedImageIndex].description || 'No description'}
+#                 </p>
+#                 <p className="uploader">
+#                   Uploaded by: <strong>{incident.images[selectedImageIndex].uploaded_by_name}</strong>
+#                 </p>
+#                 <p className="timestamp">
+#                   {new Date(incident.images[selectedImageIndex].uploaded_at).toLocaleString()}
+#                 </p>
+#               </div>
+#               
+#               {/* CAROUSEL CONTROLS */}
+#               {incident.images.length > 1 && (
+#                 <div className="carousel-controls">
+#                   <button 
+#                     onClick={() => setSelectedImageIndex(Math.max(0, selectedImageIndex - 1))}
+#                     disabled={selectedImageIndex === 0}
+#                   >
+#                     ← Previous
+#                   </button>
+#                   <span>{selectedImageIndex + 1} / {incident.images.length}</span>
+#                   <button 
+#                     onClick={() => setSelectedImageIndex(Math.min(incident.images.length - 1, selectedImageIndex + 1))}
+#                     disabled={selectedImageIndex === incident.images.length - 1}
+#                   >
+#                     Next →
+#                   </button>
+#                 </div>
+#               )}
+#               
+#               {/* THUMBNAIL STRIP */}
+#               <div className="thumbnail-strip">
+#                 {incident.images.map((img, idx) => (
+#                   <img
+#                     key={img.id}
+#                     src={img.image}
+#                     alt={`Thumbnail ${idx + 1}`}
+#                     className={`thumbnail ${idx === selectedImageIndex ? 'active' : ''}`}
+#                     onClick={() => setSelectedImageIndex(idx)}
+#                   />
+#                 ))}
+#               </div>
+#             </div>
+#           </div>
+#         ) : (
+#           <div className="no-images">
+#             <p>No images uploaded for this incident</p>
+#           </div>
+#         )}
+# 
+#         {/* SIGNALS/ALERTS */}
+#         {incident.signals && incident.signals.length > 0 && (
+#           <div className="signals-section">
+#             <h3>Signals ({incident.signals.length})</h3>
+#             {incident.signals.map(signal => (
+#               <div key={signal.id} className="signal-item">
+#                 <span className="signal-type">{signal.signal_type}</span>
+#                 <p>{signal.details}</p>
+#               </div>
+#             ))}
+#           </div>
+#         )}
+# 
+#         {/* GUARD ASSIGNMENT */}
+#         {incident.guard_assignment && (
+#           <div className="assignment-section">
+#             <h3>Assignment</h3>
+#             <p>Guard: {incident.guard_assignment.guard_name}</p>
+#             <p>Assigned: {new Date(incident.guard_assignment.assigned_at).toLocaleString()}</p>
+#           </div>
+#         )}
+#       </div>
+# 
+#       {/* ACTION BUTTONS */}
+#       <div className="detail-actions">
+#         <button className="btn-accept" onClick={() => acceptAlert(incident.id)}>
+#           Accept & Start
+#         </button>
+#         <button className="btn-decline" onClick={() => declineAlert(incident.id)}>
+#           Decline
+#         </button>
+#         <button className="btn-resolve" onClick={() => resolveIncident(incident.id)}>
+#           Resolve Incident
+#         </button>
+#       </div>
+#     </div>
+#   );
+# }
+
+# ============================================================
+# CSS FOR PROPER IMAGE RENDERING
+# ============================================================
+# 
+# .images-section {
+#   background: #f5f5f5;
+#   border-radius: 8px;
+#   padding: 20px;
+#   margin: 20px 0;
+# }
+# 
+# .image-carousel {
+#   display: flex;
+#   flex-direction: column;
+#   gap: 15px;
+# }
+# 
+# .main-image {
+#   width: 100%;
+#   max-height: 600px;
+#   object-fit: contain;
+#   border-radius: 8px;
+#   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+# }
+# 
+# .image-info {
+#   background: white;
+#   padding: 15px;
+#   border-radius: 6px;
+# }
+# 
+# .image-info .description {
+#   font-size: 16px;
+#   font-weight: 500;
+#   margin: 0 0 10px 0;
+# }
+# 
+# .image-info .uploader {
+#   font-size: 14px;
+#   color: #666;
+#   margin: 5px 0;
+# }
+# 
+# .image-info .timestamp {
+#   font-size: 12px;
+#   color: #999;
+#   margin: 5px 0;
+# }
+# 
+# .carousel-controls {
+#   display: flex;
+#   justify-content: center;
+#   align-items: center;
+#   gap: 20px;
+#   padding: 10px;
+# }
+# 
+# .carousel-controls button {
+#   padding: 8px 16px;
+#   background: #007bff;
+#   color: white;
+#   border: none;
+#   border-radius: 4px;
+#   cursor: pointer;
+# }
+# 
+# .carousel-controls button:disabled {
+#   background: #ccc;
+#   cursor: not-allowed;
+# }
+# 
+# .thumbnail-strip {
+#   display: flex;
+#   gap: 10px;
+#   overflow-x: auto;
+#   padding: 10px 0;
+# }
+# 
+# .thumbnail {
+#   width: 80px;
+#   height: 80px;
+#   object-fit: cover;
+#   border-radius: 4px;
+#   cursor: pointer;
+#   border: 2px solid transparent;
+#   transition: border-color 0.2s;
+# }
+# 
+# .thumbnail:hover {
+#   border-color: #007bff;
+# }
+# 
+# .thumbnail.active {
+#   border-color: #007bff;
+#   box-shadow: 0 0 8px rgba(0,123,255,0.3);
+# }
+
+# ============================================================
+# KEY POINTS FOR GUARD VIEW
+# ============================================================
+# 
+# 1. IMAGES ARE ALWAYS INCLUDED
+#    - GET /incidents/{id}/ always returns images array
+#    - No special parameters needed
+#    - All images included in single response
+# 
+# 2. IMAGE URLS ARE ABSOLUTE
+#    - Use directly: <img src={image.image} />
+#    - Full HTTPS Google Cloud Storage URL
+#    - No need for baseUrl + image.image
+# 
+# 3. GUARD HAS FULL ACCESS
+#    - Can see all student-uploaded images
+#    - Before accepting alert
+#    - Before starting work
+#    - Critical for decision making
+# 
+# 4. IMAGE METADATA PROVIDED
+#    - Who uploaded: uploaded_by_name, uploaded_by_email
+#    - When: uploaded_at (ISO timestamp)
+#    - What: description, id
+# 
+# 5. PROPER UX
+#    - Show image count in list
+#    - Display images before asking to accept
+#    - Carousel for multiple images
+#    - Thumbnails for quick navigation
+# 
+# ============================================================
+

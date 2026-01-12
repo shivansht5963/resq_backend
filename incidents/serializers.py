@@ -7,13 +7,14 @@ from chat.models import Conversation, Message
 class IncidentImageSerializer(serializers.ModelSerializer):
     """Serializer for incident images."""
     
-    uploaded_by_email = serializers.CharField(source='uploaded_by.email', read_only=True)
+    uploaded_by_email = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    uploaded_by_name = serializers.SerializerMethodField()
     
     class Meta:
         model = IncidentImage
-        fields = ('id', 'image', 'uploaded_by_email', 'uploaded_at', 'description')
-        read_only_fields = ('id', 'uploaded_at', 'uploaded_by_email')
+        fields = ('id', 'image', 'uploaded_by_email', 'uploaded_by_name', 'uploaded_at', 'description')
+        read_only_fields = ('id', 'uploaded_at')
     
     def get_image(self, obj):
         """Return absolute URL for image."""
@@ -23,6 +24,14 @@ class IncidentImageSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.image.url)
             return obj.image.url
         return None
+    
+    def get_uploaded_by_email(self, obj):
+        """Return email of user who uploaded image."""
+        return obj.uploaded_by.email if obj.uploaded_by else None
+    
+    def get_uploaded_by_name(self, obj):
+        """Return full name of user who uploaded image."""
+        return obj.uploaded_by.full_name if obj.uploaded_by else None
 
 
 class BeaconSerializer(serializers.ModelSerializer):
@@ -163,13 +172,14 @@ class IncidentListSerializer(serializers.ModelSerializer):
 
     beacon = BeaconSerializer(read_only=True)
     signal_count = serializers.SerializerMethodField()
+    image_count = serializers.SerializerMethodField()
     guard_assignment = serializers.SerializerMethodField()
 
     class Meta:
         model = Incident
         fields = (
             'id', 'beacon', 'status', 'priority', 'description', 'report_type', 'location',
-            'signal_count', 'guard_assignment',
+            'signal_count', 'image_count', 'guard_assignment',
             'first_signal_time', 'last_signal_time',
             'created_at'
         )
@@ -177,6 +187,9 @@ class IncidentListSerializer(serializers.ModelSerializer):
     
     def get_signal_count(self, obj):
         return obj.signals.count()
+    
+    def get_image_count(self, obj):
+        return obj.images.count()
     
     def get_guard_assignment(self, obj):
         try:

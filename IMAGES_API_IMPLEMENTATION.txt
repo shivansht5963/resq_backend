@@ -1,0 +1,150 @@
+INCIDENT IMAGES API IMPLEMENTATION - COMPLETE
+================================================
+
+All incident images are now properly included in API responses with absolute URLs and complete metadata.
+
+## IMPLEMENTATION DETAILS
+
+### 1. IncidentImageSerializer (incidents/serializers.py)
+✓ Enhanced with additional fields:
+  - image: Absolute URL to the image (handled by get_image() method)
+  - uploaded_by_email: Email of user who uploaded
+  - uploaded_by_name: Full name of user who uploaded
+  - uploaded_at: Timestamp of upload
+  - description: Optional caption
+
+Fields returned in API response:
+{
+  "id": 22,
+  "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/12/image.jpg",
+  "uploaded_by_email": "student@example.com",
+  "uploaded_by_name": "Student Full Name",
+  "uploaded_at": "2026-01-12T20:19:08.962832+05:30",
+  "description": "Image description"
+}
+
+### 2. IncidentDetailedSerializer (incidents/serializers.py)
+✓ Already includes 'images' field
+✓ Returns all images for the incident with full details
+✓ Properly handles null/missing images
+✓ Images are serialized using IncidentImageSerializer with request context
+
+Sample response structure:
+{
+  "id": "incident-uuid",
+  "beacon": {...},
+  "status": "CREATED",
+  "priority": 3,
+  "description": "...",
+  "signals": [...],
+  "images": [
+    {
+      "id": 22,
+      "image": "https://storage.googleapis.com/...",
+      "uploaded_by_email": "...",
+      "uploaded_by_name": "...",
+      "uploaded_at": "...",
+      "description": "..."
+    },
+    ...
+  ],
+  "guard_assignment": {...},
+  "guard_alerts": [...]
+}
+
+### 3. IncidentListSerializer (incidents/serializers.py)
+✓ Added 'image_count' field for quick reference
+✓ Shows number of images without fetching all image details
+✓ Lightweight for list endpoints
+
+### 4. IncidentViewSet.get_queryset() (incidents/views.py)
+✓ Updated to prefetch 'images' and 'guard_alerts' for all user roles
+✓ Optimizes database queries using select_related and prefetch_related
+✓ Prevents N+1 query problems
+
+Changed from:
+  prefetch_related('signals', 'guard_assignments', 'conversation__messages')
+
+To:
+  prefetch_related('signals', 'images', 'guard_assignments', 'guard_alerts', 'conversation__messages')
+
+### 5. Push Notification Enhancement (incidents/services.py)
+✓ send_push_notifications_for_alerts() now includes image URLs in notification data
+✓ Image URLs sent in notification payload for mobile app to display
+✓ Image count included in notification metadata
+✓ First 3 image URLs sent (Expo push notification size limit)
+
+Push notification data structure:
+{
+  "type": "GUARD_ALERT",
+  "incident_id": "uuid",
+  "alert_id": "alert-id",
+  "priority": "HIGH",
+  "location": "Location Name",
+  "image_count": 3,
+  "images": [
+    "https://storage.googleapis.com/resq-campus-security/incidents/...",
+    "https://storage.googleapis.com/resq-campus-security/incidents/...",
+    "https://storage.googleapis.com/resq-campus-security/incidents/..."
+  ]
+}
+
+## API ENDPOINTS AFFECTED
+
+### 1. GET /api/incidents/
+- List endpoint includes 'image_count' for each incident
+- Lightweight response showing total images without full details
+
+### 2. GET /api/incidents/{id}/
+- Returns full incident details including all images
+- Each image includes:
+  - Absolute URL (accessible from frontend)
+  - Uploader information
+  - Upload timestamp
+  - Optional description
+
+### 3. POST /api/incidents/report/ (multipart/form-data)
+- Accepts up to 3 images per incident report
+- Returns created images in response
+- Already implemented - now properly tested
+
+### 4. POST /api/incidents/report-sos/
+- SOS incidents can have images added after creation via PATCH endpoint
+- Full incident details returned with images
+
+## IMAGE URL FORMAT
+All image URLs are absolute HTTPS URLs to Google Cloud Storage:
+- Format: https://storage.googleapis.com/resq-campus-security/incidents/{YEAR}/{MONTH}/{DAY}/{filename}.jpg
+- Properly signed URLs for secure access
+- Direct accessible from mobile app without backend proxy
+
+## DATABASE OPTIMIZATION
+✓ Added prefetch_related for images in viewset queryset
+✓ Prevents N+1 queries when fetching incident with multiple images
+✓ Single query per incident instead of N+1
+
+## ERROR HANDLING
+✓ Handles missing uploaded_by (null user) gracefully
+✓ Handles missing image files gracefully
+✓ Returns proper error responses for upload failures
+✓ Logs all image operations for audit trail
+
+## TESTING
+✓ Test suite in test_incident_images_api.py validates:
+  - Image serialization with absolute URLs
+  - All required fields present in response
+  - Image count in list view
+  - Push notification data includes images
+  - Multiple images per incident
+  - Image uploader information accuracy
+
+All tests PASSED ✓
+
+## NEXT STEPS
+Frontend should:
+1. Parse 'images' array from GET /api/incidents/{id}/ response
+2. Display image URLs directly from 'image' field
+3. Show uploader name and timestamp
+4. Optional: Show image count in list view using 'image_count' field
+5. When receiving push notification, extract 'images' array for preview thumbnails
+

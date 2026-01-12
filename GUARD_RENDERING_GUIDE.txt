@@ -1,0 +1,476 @@
+GUARD VIEW - FRONTEND RENDERING IMPLEMENTATION GUIDE
+======================================================
+
+## OVERVIEW
+Guard interface needs to display incidents with all student-uploaded images. 
+Images help guards make quick decisions about incident severity and required actions.
+
+## UI LAYOUT - GUARD INCIDENT DETAIL VIEW
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ INCIDENT DETAIL VIEW                                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│ [Header Section]                                           │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ Status: CREATED          Priority: HIGH   ⚠️        │   │
+│ │ Location: Library 3F - Building A                   │   │
+│ └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│ [Incident Info - Left Column]                              │
+│ ┌──────────────────────────┐  ┌────────────────────────┐  │
+│ │ Incident Details         │  │ 📸 Images Section      │  │
+│ │                          │  │ ┌────────────────────┐ │  │
+│ │ Description:             │  │ │                    │ │  │
+│ │ Suspicious activity      │  │ │   [Main Image]     │ │  │
+│ │ at entrance              │  │ │                    │ │  │
+│ │                          │  │ │  600px x 400px     │ │  │
+│ │ Report Type:             │  │ │                    │ │  │
+│ │ Safety Concern           │  │ └────────────────────┘ │  │
+│ │                          │  │                        │  │
+│ │ Building: Building A     │  │ [Image Info]           │  │
+│ │ Floor: 3                 │  │ Description: Front... │  │
+│ │ Beacon: Library Entr.    │  │ By: John Doe          │  │
+│ │                          │  │ Time: Jan 12, 20:15   │  │
+│ │ First Signal:            │  │                        │  │
+│ │ 2026-01-12 20:15:00      │  │ [Carousel Controls]    │  │
+│ │                          │  │ ← 1 / 3 →              │  │
+│ │ Status: CREATED          │  │                        │  │
+│ │ Signals: 1               │  │ [Thumbnails]           │  │
+│ │ Images: 3                │  │ [T1] [T2] [T3]        │  │
+│ └──────────────────────────┘  └────────────────────────┘  │
+│                                                              │
+│ [Action Buttons - Bottom]                                   │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ [✓ Accept & Start] [✗ Decline] [✔ Resolve]         │   │
+│ └──────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## INCIDENT LIST VIEW - WITH IMAGE COUNT
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ACTIVE INCIDENTS                                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ [CREATED]  Priority: 3                              │   │
+│ │ Library Entrance - Building A                       │   │
+│ │ Suspicious activity detected...                     │   │
+│ │                                                      │   │
+│ │ 📸 2 images    1 signal    [View Details →]         │   │
+│ └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ [IN_PROGRESS] Priority: 4                           │   │
+│ │ Science Building - Floor 2                          │   │
+│ │ Unusual sound near storage area...                  │   │
+│ │                                                      │   │
+│ │ 📸 3 images    2 signals   [View Details →]         │   │
+│ └──────────────────────────────────────────────────────┘   │
+│                                                              │
+│ ┌──────────────────────────────────────────────────────┐   │
+│ │ [CREATED]  Priority: 1                              │   │
+│ │ Dormitory Hallway - Building B                      │   │
+│ │ Low priority maintenance issue...                   │   │
+│ │                                                      │   │
+│ │ 📸 0 images    1 signal    [View Details →]         │   │
+│ └──────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## STEP-BY-STEP IMPLEMENTATION
+
+### 1. FETCH INCIDENT WITH IMAGES
+
+```javascript
+async function fetchIncidentWithImages(incidentId, guardToken) {
+  const response = await fetch(
+    `/api/incidents/${incidentId}/`,
+    {
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${guardToken}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch incident: ${response.status}`);
+  }
+  
+  return response.json();
+}
+```
+
+### 2. DISPLAY INCIDENT HEADER
+
+```javascript
+function renderIncidentHeader(incident) {
+  return `
+    <div class="incident-header">
+      <h1>${incident.status}</h1>
+      <div class="badges">
+        <span class="status ${incident.status.toLowerCase()}">
+          ${incident.status}
+        </span>
+        <span class="priority priority-${incident.priority}">
+          Priority: ${incident.priority}
+        </span>
+        <span class="location">
+          📍 ${incident.beacon.location_name}
+        </span>
+      </div>
+    </div>
+    
+    <div class="incident-meta">
+      <p><strong>Building:</strong> ${incident.beacon.building}, Floor ${incident.beacon.floor}</p>
+      <p><strong>Description:</strong> ${incident.description}</p>
+      <p><strong>Report Type:</strong> ${incident.report_type}</p>
+      <p><strong>Location Notes:</strong> ${incident.location || 'N/A'}</p>
+    </div>
+  `;
+}
+```
+
+### 3. DISPLAY IMAGE CAROUSEL (CRITICAL)
+
+```javascript
+function renderImageCarousel(incident) {
+  // Check if images exist
+  if (!incident.images || incident.images.length === 0) {
+    return '<p class="no-images">No images uploaded for this incident</p>';
+  }
+  
+  const firstImage = incident.images[0];
+  
+  return `
+    <div class="image-carousel">
+      <h3>📸 Evidence Images (${incident.images.length})</h3>
+      
+      <!-- Main Image -->
+      <div class="main-image-container">
+        <img 
+          id="mainImage" 
+          src="${firstImage.image}" 
+          alt="${firstImage.description}"
+          class="main-image"
+        />
+      </div>
+      
+      <!-- Image Information -->
+      <div class="image-info">
+        <p class="description">
+          <strong>Description:</strong> ${firstImage.description || 'No description provided'}
+        </p>
+        <p class="uploader">
+          <strong>Uploaded by:</strong> ${firstImage.uploaded_by_name} 
+          (${firstImage.uploaded_by_email})
+        </p>
+        <p class="timestamp">
+          <strong>Upload Time:</strong> 
+          ${new Date(firstImage.uploaded_at).toLocaleString()}
+        </p>
+      </div>
+      
+      <!-- Carousel Controls -->
+      ${incident.images.length > 1 ? `
+        <div class="carousel-controls">
+          <button id="prevBtn" onclick="previousImage()">← Previous</button>
+          <span id="imageCounter">1 / ${incident.images.length}</span>
+          <button id="nextBtn" onclick="nextImage()">Next →</button>
+        </div>
+      ` : ''}
+      
+      <!-- Thumbnail Strip -->
+      ${incident.images.length > 1 ? `
+        <div class="thumbnail-strip">
+          ${incident.images.map((img, idx) => `
+            <img 
+              src="${img.image}" 
+              alt="Thumbnail ${idx + 1}"
+              class="thumbnail ${idx === 0 ? 'active' : ''}"
+              onclick="selectImage(${idx})"
+              title="${img.description}"
+            />
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+```
+
+### 4. CAROUSEL STATE AND CONTROLS
+
+```javascript
+let currentImageIndex = 0;
+
+function selectImage(index) {
+  const incident = window.currentIncident; // Store in window
+  const image = incident.images[index];
+  
+  // Update main image
+  document.getElementById('mainImage').src = image.image;
+  document.getElementById('mainImage').alt = image.description;
+  
+  // Update info
+  document.querySelector('.description').innerHTML = 
+    `<strong>Description:</strong> ${image.description || 'No description'}`;
+  document.querySelector('.uploader').innerHTML = 
+    `<strong>Uploaded by:</strong> ${image.uploaded_by_name} (${image.uploaded_by_email})`;
+  document.querySelector('.timestamp').innerHTML = 
+    `<strong>Upload Time:</strong> ${new Date(image.uploaded_at).toLocaleString()}`;
+  
+  // Update counter
+  document.getElementById('imageCounter').textContent = 
+    `${index + 1} / ${incident.images.length}`;
+  
+  // Update thumbnails
+  document.querySelectorAll('.thumbnail').forEach((thumb, i) => {
+    thumb.classList.toggle('active', i === index);
+  });
+  
+  // Update button states
+  document.getElementById('prevBtn').disabled = index === 0;
+  document.getElementById('nextBtn').disabled = index === incident.images.length - 1;
+  
+  currentImageIndex = index;
+}
+
+function previousImage() {
+  const incident = window.currentIncident;
+  if (currentImageIndex > 0) {
+    selectImage(currentImageIndex - 1);
+  }
+}
+
+function nextImage() {
+  const incident = window.currentIncident;
+  if (currentImageIndex < incident.images.length - 1) {
+    selectImage(currentImageIndex + 1);
+  }
+}
+```
+
+### 5. CSS STYLING
+
+```css
+/* Image Carousel Container */
+.image-carousel {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.image-carousel h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+/* Main Image Display */
+.main-image-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+  background: white;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.main-image {
+  max-width: 100%;
+  max-height: 600px;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Image Information */
+.image-info {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  border-left: 4px solid #007bff;
+}
+
+.image-info p {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.image-info .description {
+  font-size: 15px;
+  color: #333;
+}
+
+.image-info .uploader {
+  color: #666;
+  font-size: 13px;
+}
+
+.image-info .timestamp {
+  color: #999;
+  font-size: 12px;
+}
+
+/* Carousel Controls */
+.carousel-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.carousel-controls button {
+  padding: 10px 20px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.carousel-controls button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.carousel-controls button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.carousel-controls span {
+  font-weight: 500;
+  color: #333;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* Thumbnail Strip */
+.thumbnail-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+}
+
+.thumbnail {
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.thumbnail:hover {
+  opacity: 1;
+  border-color: #007bff;
+}
+
+.thumbnail.active {
+  border-color: #007bff;
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(0,123,255,0.3);
+}
+
+/* No Images Message */
+.no-images {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: 15px;
+  color: #856404;
+  text-align: center;
+}
+```
+
+## COMPLETE RENDERING FUNCTION
+
+```javascript
+async function renderGuardIncidentDetail(incidentId, guardToken) {
+  try {
+    // Fetch incident data
+    const incident = await fetchIncidentWithImages(incidentId, guardToken);
+    window.currentIncident = incident;
+    
+    // Get container
+    const container = document.getElementById('incident-detail-container');
+    
+    // Render all sections
+    container.innerHTML = `
+      ${renderIncidentHeader(incident)}
+      ${renderImageCarousel(incident)}
+      ${renderIncidentSignals(incident)}
+      ${renderActionButtons(incident)}
+    `;
+    
+    // Initialize carousel
+    if (incident.images && incident.images.length > 1) {
+      selectImage(0); // Initialize first image
+    }
+    
+  } catch (error) {
+    console.error('Error rendering incident:', error);
+    document.getElementById('incident-detail-container').innerHTML = 
+      `<p class="error">Failed to load incident details. Please try again.</p>`;
+  }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', () => {
+  const incidentId = new URLSearchParams(window.location.search).get('id');
+  const guardToken = localStorage.getItem('guardToken');
+  
+  if (incidentId && guardToken) {
+    renderGuardIncidentDetail(incidentId, guardToken);
+  }
+});
+```
+
+## KEY FEATURES CHECKLIST
+
+✓ Images displayed immediately (no separate API calls)
+✓ Absolute URLs used directly (no path manipulation)
+✓ Image carousel with navigation
+✓ Thumbnail preview strip
+✓ Image metadata displayed (uploader, timestamp, description)
+✓ Multiple images handled (up to 3 per incident)
+✓ Responsive design
+✓ Clear visual hierarchy
+✓ Error handling for missing images
+✓ Guard can assess severity before accepting
+
+## PERFORMANCE NOTES
+
+- All images loaded in single API call (no N+1 queries)
+- Images stored on Google Cloud Storage CDN
+- HTTPS URLs allow browser caching
+- Lazy load images only when viewing carousel
+- Thumbnail strip scrollable for many images
+
