@@ -221,6 +221,23 @@ class IncidentImage(models.Model):
         verbose_name = "Incident Image"
         verbose_name_plural = "Incident Images"
     
+    def save(self, *args, **kwargs):
+        """Save image and make it publicly readable on GCS."""
+        super().save(*args, **kwargs)
+        
+        # Make image public on Google Cloud Storage
+        if self.image:
+            try:
+                # Get the storage backend
+                storage = self.image.storage
+                blob = storage.bucket.blob(self.image.name)
+                
+                # Make blob publicly readable
+                blob.make_public()
+            except Exception as e:
+                # Log error but don't fail - image still saves locally
+                print(f"Warning: Could not make image public: {e}")
+    
     def __str__(self):
         return f"Image for {self.incident.id} uploaded by {self.uploaded_by.email}"
 
