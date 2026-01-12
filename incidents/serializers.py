@@ -17,11 +17,13 @@ class IncidentImageSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'uploaded_at')
     
     def get_image(self, obj):
-        """Return absolute URL for image."""
+        """Return direct GCS HTTPS URL for image (no request context needed).
+        
+        GCS URLs are absolute and already include the full domain:
+        https://storage.googleapis.com/bucket-name/incidents/2026/01/13/image.jpg
+        """
         if obj.image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.image.url)
+            # obj.image.url returns the direct GCS URL from storage backend
             return obj.image.url
         return None
     
