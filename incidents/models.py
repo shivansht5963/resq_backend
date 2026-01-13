@@ -223,22 +223,43 @@ class IncidentImage(models.Model):
     
     def save(self, *args, **kwargs):
         """Save image and make it publicly readable on GCS."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Save model to database AND upload file to storage
         super().save(*args, **kwargs)
         
         # After save, try to make the file public (only for GCS)
-        if self.image and hasattr(self.image.storage, 'bucket'):
+        if self.image:
             try:
-                blob = self.image.storage.bucket.blob(self.image.name)
-                if blob.exists():
-                    blob.make_public()
+                # Check if using GCS backend
+                storage_backend = self.image.storage
+                if hasattr(storage_backend, 'bucket'):
+                    bucket = storage_backend.bucket
+                    blob_name = self.image.name
+                    blob = bucket.blob(blob_name)
+                    
+                    # Try to make public
+                    if blob.exists():
+                        blob.make_public()
+                        logger.info(f"✓ Image {self.id} made public: gs://{bucket.name}/{blob_name}")
+                    else:
+                        logger.warning(f"⚠ Image {self.id} blob not found immediately after save: {blob_name}")
+                        # Try again with a short delay in case of eventual consistency
+                        import time
+                        time.sleep(0.5)
+                        if blob.exists():
+                            blob.make_public()
+                            logger.info(f"✓ Image {self.id} made public (after retry): gs://{bucket.name}/{blob_name}")
+                else:
+                    logger.debug(f"Image {self.id} not using GCS backend (local storage)")
             except Exception as e:
-                # Log but don't fail - image already saved
-                import logging
-                logging.warning(f"Could not make image public: {e}")
+                # Log but don't fail - image already saved to storage
+                logger.error(f"✗ Could not make image {self.id} public: {type(e).__name__}: {e}")
     
     def __str__(self):
-        return f"Image for {self.incident.id} uploaded by {self.uploaded_by.email}"
+        uploader = self.uploaded_by.email if self.uploaded_by else "Unknown"
+        return f"Image for {self.incident.id} uploaded by {uploader}"
 
 
 class IncidentSignal(models.Model):
