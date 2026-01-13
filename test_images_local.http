@@ -1,0 +1,383 @@
+### Local Image Upload & Retrieval Test File
+### Use VS Code REST Client extension to run these requests
+### Install: REST Client by Huachao Zheng
+
+@baseUrl = http://localhost:8000/api
+@mediaPath = /path/to/your/images
+
+# ============================================================
+# STEP 1: STUDENT LOGIN
+# ============================================================
+
+### S1.1 - Create Student User (if needed)
+POST http://localhost:8000/api/auth/register/
+Content-Type: application/json
+
+{
+  "email": "offer6849@gmail.com",
+  "password": "GoogleAC12%"
+}
+
+### S1.2 - Student Login
+# Save the token from response for use in other requests
+POST http://localhost:8000/api/auth/login/
+Content-Type: application/json
+
+{
+  "email": "offer6849@gmail.com",
+  "password": "GoogleAC12%"
+}
+
+@studentToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
+
+# ============================================================
+# STEP 2: CREATE BEACON (for incident location)
+# ============================================================
+
+### S2.1 - Create Beacon
+POST http://localhost:8000/api/beacons/
+Authorization: Token @studentToken
+Content-Type: application/json
+
+{
+  "beacon_id": "beacon_test_001",
+  "uuid": "f7826da6-4fa2-4e98-8024-bc5b71e0893e",
+  "major": 10001,
+  "minor": 10001,
+  "location_name": "Test Location - Library",
+  "building": "Building A",
+  "floor": 1,
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "is_active": true
+}
+
+@beaconId = 1
+
+# ============================================================
+# STEP 3: CREATE INCIDENT WITH IMAGES
+# ============================================================
+
+### S3.1 - Create Incident with Single Image
+POST http://localhost:8000/api/incidents/
+Authorization: Token @studentToken
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+1
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="priority"
+
+3
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Suspicious activity at library entrance
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="report_type"
+
+Safety Concern
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="location"
+
+Library Ground Floor, Entrance
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="test_image_1.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/image1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### S3.2 - Create Incident with Multiple Images
+# For this to work, you need actual image files
+# Create test_images folder with image1.jpg, image2.jpg, image3.jpg
+# Or modify the file paths below
+
+POST http://localhost:8000/api/incidents/
+Authorization: Token @studentToken
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+1
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="priority"
+
+4
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Multiple suspicious items found near building entrance
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="report_type"
+
+Safety Concern
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="location"
+
+Building A Entrance
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="photo_front.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/image1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="photo_side.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/image2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="photo_detail.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/image3.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+@incidentId = 550e8400-e29b-41d4-a716-446655440000
+
+# ============================================================
+# STEP 4: RETRIEVE INCIDENT WITH IMAGES
+# ============================================================
+
+### S4.1 - Get Incident Details (includes all images)
+GET http://localhost:8000/api/incidents/@incidentId/
+Authorization: Token @studentToken
+Content-Type: application/json
+
+# Expected response includes:
+# {
+#   "id": "...",
+#   "status": "CREATED",
+#   "priority": 3,
+#   "description": "...",
+#   "images": [
+#     {
+#       "id": 22,
+#       "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/13/photo.jpg",
+#       "uploaded_by_email": "student@test.com",
+#       "uploaded_by_name": "Test Student",
+#       "uploaded_at": "2026-01-13T...",
+#       "description": "Image 1"
+#     },
+#     ...
+#   ],
+#   ...
+# }
+
+### S4.2 - Get Incidents List (includes image_count)
+GET http://localhost:8000/api/incidents/?limit=20
+Authorization: Token @studentToken
+Content-Type: application/json
+
+# Expected response shows image_count for each incident:
+# {
+#   "count": 5,
+#   "results": [
+#     {
+#       "id": "550e8400-...",
+#       "status": "CREATED",
+#       "priority": 3,
+#       "image_count": 3,
+#       ...
+#     }
+#   ]
+# }
+
+# ============================================================
+# STEP 5: TEST IMAGE URL ACCESSIBILITY
+# ============================================================
+
+### S5.1 - Direct Image URL Access (Copy from incident response)
+# Once you have an image URL from the incident response like:
+# "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/13/image.jpg"
+# 
+# Test it by:
+GET https://storage.googleapis.com/resq-campus-security/incidents/2026/01/13/image.jpg
+
+# Should return: 200 OK with image data
+# If you get 403 AccessDenied, bucket permissions not set up correctly
+
+# ============================================================
+# STEP 6: CREATE AND RETRIEVE (Full Workflow)
+# ============================================================
+
+### S6.1 - Full Test: Create + Verify
+# This tests the complete flow
+# 1. Create incident with image
+# 2. Extract incident ID from response
+# 3. Use that ID in next request to verify image is there
+
+POST http://localhost:8000/api/incidents/
+Authorization: Token @studentToken
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+1
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="priority"
+
+2
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Full workflow test
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="workflow_test.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/image1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### S6.2 - Then copy incident ID from S6.1 response and use here
+GET http://localhost:8000/api/incidents/COPY_ID_FROM_ABOVE_RESPONSE/
+Authorization: Token @studentToken
+Content-Type: application/json
+
+# ============================================================
+# STEP 7: TROUBLESHOOTING ENDPOINTS
+# ============================================================
+
+### S7.1 - Check Authentication Token
+GET http://localhost:8000/api/auth/user/
+Authorization: Token @studentToken
+Content-Type: application/json
+
+# Should return current user info
+
+### S7.2 - List All Beacons
+GET http://localhost:8000/api/beacons/
+Authorization: Token @studentToken
+Content-Type: application/json
+
+# Verify beacon exists for incident creation
+
+### S7.3 - Check Django Debug Info
+GET http://localhost:8000/
+Content-Type: application/json
+
+# Should return home page or redirect
+
+# ============================================================
+# SETUP INSTRUCTIONS
+# ============================================================
+
+# 1. Install REST Client extension in VS Code
+#    - Go to Extensions
+#    - Search for "REST Client"
+#    - Install by Huachao Zheng
+
+# 2. Prepare test images
+#    - Create folder: test_images/
+#    - Add 3 JPEG images:
+#      - test_images/image1.jpg (640x480 minimum)
+#      - test_images/image2.jpg
+#      - test_images/image3.jpg
+
+# 3. Start Django server
+#    python manage.py runserver
+
+# 4. Update @studentToken variable
+#    - Run S1.2 (Student Login)
+#    - Copy token from response
+#    - Replace @studentToken = ... above
+
+# 5. Update @beaconId and @incidentId
+#    - Run S2.1 (Create Beacon)
+#    - Copy beacon ID from response
+#    - Replace @beaconId = ...
+#    
+#    - Run S3.1 or S3.2 (Create Incident)
+#    - Copy incident ID from response
+#    - Replace @incidentId = ...
+
+# 6. Run requests in order
+#    - Click "Send Request" above each request
+#    - OR use Ctrl+Alt+R to send all
+
+# ============================================================
+# EXPECTED RESPONSES
+# ============================================================
+
+### Create Incident Success (201)
+# {
+#   "id": "550e8400-e29b-41d4-a716-446655440000",
+#   "beacon": {...},
+#   "status": "CREATED",
+#   "priority": 3,
+#   "description": "Suspicious activity...",
+#   "images": [
+#     {
+#       "id": 22,
+#       "image": "https://storage.googleapis.com/resq-campus-security/incidents/2026/01/13/photo_1.jpg",
+#       "uploaded_by_email": "student@test.com",
+#       "uploaded_by_name": "Test Student",
+#       "uploaded_at": "2026-01-13T20:15:30+05:30",
+#       "description": "Image 1"
+#     }
+#   ],
+#   ...
+# }
+
+### Get Incident Success (200)
+# Same as above - incident with all images
+
+### Get List Success (200)
+# {
+#   "count": 2,
+#   "next": null,
+#   "previous": null,
+#   "results": [
+#     {
+#       "id": "550e8400-...",
+#       "status": "CREATED",
+#       "priority": 3,
+#       "image_count": 1,
+#       ...
+#     }
+#   ]
+# }
+
+# ============================================================
+# ERROR CODES
+# ============================================================
+
+# 400 - Bad Request: Invalid data or missing required fields
+# 401 - Unauthorized: Invalid or missing token
+# 403 - Forbidden: User doesn't have permission
+# 404 - Not Found: Incident/Beacon doesn't exist
+# 500 - Server Error: Check Django logs
+
+# ============================================================
+# COMMON ISSUES & FIXES
+# ============================================================
+
+# Issue: 401 Unauthorized
+# Fix: Update @studentToken with actual token from login response
+
+# Issue: 404 Not Found on incident
+# Fix: Copy correct incident ID from create response
+
+# Issue: Image URL returns 403 AccessDenied
+# Fix: Run GCS bucket setup commands from GCS_BUCKET_PUBLIC_ACCESS.txt
+
+# Issue: "No such object" error
+# Fix: Bucket not configured or image didn't upload to GCS
+
+# Issue: Multipart request rejected
+# Fix: Make sure boundary matches in Content-Type and body
+
+# ============================================================
+# NOTES
+# ============================================================
+
+# - Each request can be run independently by clicking "Send Request"
+# - Responses appear in a new tab on the right
+# - You can modify values (token, ID, description) before sending
+# - Variables like @studentToken are used across requests
+# - Image paths are relative to the file location
+# - Token expires after inactivity - re-login if 401 received
