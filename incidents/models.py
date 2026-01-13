@@ -223,20 +223,19 @@ class IncidentImage(models.Model):
     
     def save(self, *args, **kwargs):
         """Save image and make it publicly readable on GCS."""
+        # Save model to database AND upload file to storage
         super().save(*args, **kwargs)
         
-        # Make image public on Google Cloud Storage
-        if self.image:
+        # After save, try to make the file public (only for GCS)
+        if self.image and hasattr(self.image.storage, 'bucket'):
             try:
-                # Get the storage backend
-                storage = self.image.storage
-                blob = storage.bucket.blob(self.image.name)
-                
-                # Make blob publicly readable
-                blob.make_public()
+                blob = self.image.storage.bucket.blob(self.image.name)
+                if blob.exists():
+                    blob.make_public()
             except Exception as e:
-                # Log error but don't fail - image still saves locally
-                print(f"Warning: Could not make image public: {e}")
+                # Log but don't fail - image already saved
+                import logging
+                logging.warning(f"Could not make image public: {e}")
     
     def __str__(self):
         return f"Image for {self.incident.id} uploaded by {self.uploaded_by.email}"

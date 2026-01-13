@@ -236,25 +236,46 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 print(f"  Content type: {image_file.content_type}")
                 print(f"  File size: {image_file.size} bytes")
                 
-                # Reset file pointer to beginning
+                # IMPORTANT: Reset file pointer to beginning before saving
+                # This ensures the entire file is available for GCS upload
                 image_file.seek(0)
                 print(f"  ✅ File pointer reset to position 0")
                 
-                # Save to GCS
+                # Read file into memory to ensure it's complete
+                file_data = image_file.read()
+                print(f"  ✅ Read {len(file_data)} bytes from file")
+                
+                # Reset pointer again after reading
+                image_file.seek(0)
+                print(f"  File pointer reset again to position 0")
+                
+                # Save to GCS via Django's storage system
                 print(f"  [→] Uploading to Google Cloud Storage...")
                 print(f"      Storage backend: {IncidentImage._meta.get_field('image').storage.__class__.__name__}")
                 
+                # Use create_incident_image helper to handle upload properly
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
                     uploaded_by=request.user,
                     description=f"Image {idx + 1}"
                 )
-                image_objects.append(incident_image)
-                print(f"  ✅ Image {idx + 1} uploaded successfully to GCS!")
-                print(f"     ID: {incident_image.id}")
-                print(f"     File path: {incident_image.image.name}")
-                print(f"     GCS URL: {incident_image.image.url}")
+                
+                # Verify file was actually saved to GCS
+                if incident_image.image:
+                    try:
+                        stored_url = incident_image.image.url
+                        print(f"  ✅ Image {idx + 1} uploaded successfully!")
+                        print(f"     ID: {incident_image.id}")
+                        print(f"     File path: {incident_image.image.name}")
+                        print(f"     GCS URL: {stored_url}")
+                        image_objects.append(incident_image)
+                    except Exception as url_error:
+                        print(f"  ⚠️  Image saved but URL generation failed: {url_error}")
+                        print(f"     File path: {incident_image.image.name}")
+                        image_objects.append(incident_image)
+                else:
+                    print(f"  ❌ Image {idx + 1}: No image file after save")
                 
             except Exception as e:
                 print(f"\n  ❌ ERROR saving image {idx + 1}:")

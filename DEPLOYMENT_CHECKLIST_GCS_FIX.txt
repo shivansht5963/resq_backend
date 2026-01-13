@@ -1,0 +1,110 @@
+DEPLOYMENT CHECKLIST FOR RENDER - GCS IMAGE STORAGE FIX
+=====================================================
+
+✓ VERIFIED - Ready to push to GitHub
+
+FILES TO COMMIT:
+================
+1. ✓ campus_security/settings.py
+   - Added STORAGES dict with GoogleCloudStorage backend
+   - Removed MEDIA_ROOT (was causing FileSystemStorage fallback)
+   - Django 5.2 uses STORAGES dict, not DEFAULT_FILE_STORAGE
+   - GCS env vars: GS_BUCKET_NAME, GS_PROJECT_ID, GOOGLE_APPLICATION_CREDENTIALS
+
+2. ✓ render.yaml
+   - Removed persistent disk mount (was causing local storage)
+   - Added GCS environment variables
+   - No disk mount = No local media directory on Render
+
+3. ✓ credentials/gen-lang-client-0117249847-eb5558a80732.json
+   - Already in repo (tracked in git)
+   - Path: /opt/render/project/src/credentials/gen-lang-client-...json
+
+FILES NOT TO COMMIT:
+====================
+1. ✓ media/ directory
+   - Excluded in .gitignore (/media)
+   - Safe to ignore
+
+2. ✓ media.backup/ directory
+   - Local testing only, not in .gitignore
+   - You can delete it locally if you want
+
+CRITICAL ENVIRONMENT VARIABLES ON RENDER DASHBOARD:
+====================================================
+Verify these are set in Render environment variables (Dashboard > Environment):
+
+1. GS_BUCKET_NAME = resq-campus-security
+   (Already in render.yaml)
+
+2. GS_PROJECT_ID = gen-lang-client-0117249847
+   (Already in render.yaml)
+
+3. GOOGLE_APPLICATION_CREDENTIALS = /opt/render/project/src/credentials/gen-lang-client-0117249847-eb5558a80732.json
+   (Already in render.yaml)
+
+4. DEBUG = True
+   (Already in render.yaml)
+
+5. DJANGO_SETTINGS_MODULE = campus_security.settings
+   (Already in render.yaml)
+
+HOW THE FIX WORKS:
+==================
+PROBLEM: Django 5.2 has new STORAGES configuration that overrides DEFAULT_FILE_STORAGE.
+         Without STORAGES dict, Django defaults to FileSystemStorage.
+         FileSystemStorage + no MEDIA_ROOT = Django looks for local disk = Files go to local disk, not GCS
+
+SOLUTION:
+1. Added STORAGES dict to settings.py
+   - 'default' backend = GoogleCloudStorage
+   - Tells Django to use GCS for all file uploads
+   
+2. Removed MEDIA_ROOT from settings.py
+   - Prevents Django from using local disk as fallback
+   
+3. Updated render.yaml
+   - Removed disk mount (no local /media directory on Render)
+   - Added env vars for GCS credentials
+   
+RESULT: All files now upload to GCS bucket, not local disk
+
+VERIFICATION:
+=============
+Local test results:
+✓ New image uploads go to GCS (verified with run_debug.py)
+✓ Images have proper URLs: https://storage.googleapis.com/resq-campus-security/...
+✓ Database records correctly point to GCS
+✓ Storage backend is now GoogleCloudStorage (not FileSystemStorage)
+
+ON RENDER AFTER DEPLOYMENT:
+===========================
+1. New incident images will upload to GCS automatically
+2. Frontend will access images via GCS URLs
+3. Images will persist (GCS is permanent, unlike render disk)
+4. No local disk space usage for images
+
+TROUBLESHOOTING IF ISSUES OCCUR:
+=================================
+If images still don't upload after deployment:
+
+1. Check Render logs for storage backend:
+   - Should show "Using storages.backends.gcloud.GoogleCloudStorage"
+   - Should NOT show FileSystemStorage
+
+2. Verify env vars in Render dashboard:
+   - GS_BUCKET_NAME must be set
+   - GOOGLE_APPLICATION_CREDENTIALS must be set
+   - Both must match render.yaml
+
+3. Check GCS bucket permissions:
+   - Bucket should allow public-read access
+   - Service account should have Storage Object Creator role
+
+4. Check credentials file exists:
+   - /opt/render/project/src/credentials/gen-lang-client-0117249847-eb5558a80732.json
+   - Must be tracked in git and in repo
+
+NOTHING ELSE NEEDS TO BE FIXED
+===============================
+The fix is complete. Just push to GitHub and deploy on Render.

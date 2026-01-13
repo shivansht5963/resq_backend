@@ -1,0 +1,177 @@
+IMAGE UPLOAD FIX - ROOT CAUSE & SOLUTION
+========================================
+
+## THE PROBLEM (Root Cause)
+
+Files are being saved to LOCAL FILESYSTEM instead of GCS!
+
+Evidence:
+```
+[STORAGE BACKEND]
+  Class: FileSystemStorage  ← WRONG!
+  Should be: PublicGoogleCloudStorage
+```
+
+When database records are created, they point to GCS paths like:
+```
+incidents/2026/01/13/6e4bd95c-c3c0-41e2-9317-db1b7c5a3f28.jpeg
+```
+
+But files are actually being saved to:
+```
+./media/incidents/2026/01/13/6e4bd95c-c3c0-41e2-9317-db1b7c5a3f28.jpeg
+```
+
+(Local disk, not GCS!)
+
+When frontend tries to fetch from GCS URL, file doesn't exist → 404 NoSuchKey error.
+
+## WHY THIS HAPPENS
+
+In `campus_security/settings.py`:
+```python
+if GS_BUCKET_NAME and GS_PROJECT_ID:
+    DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
+else:
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+```
+
+The condition checks if GS_BUCKET_NAME and GS_PROJECT_ID have values.
+
+**On local dev:** They might not be set in environment, so FileSystemStorage is used
+**On Render:** They might not be set in render.yaml or environment variables
+
+## SOLUTION
+
+### Step 1: Force GCS Backend Regardless
+
+Edit `campus_security/settings.py`:
+
+```python
+# ALWAYS use GCS for image storage in production
+if 'render.com' in os.environ.get('RENDER', '') or os.environ.get('ENVIRONMENT') == 'production':
+    print("[PRODUCTION] Force enabling GCS backend")
+    DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
+    MEDIA_URL = 'https://storage.googleapis.com/resq-campus-security/'
+elif GS_BUCKET_NAME and GS_PROJECT_ID:
+    DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
+    MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
+else:
+    # Only use local storage in development
+    print("[DEV] Using local file storage")
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_URL = '/media/'
+```
+
+### Step 2: Verify Environment Variables
+
+On Render dashboard:
+1. Go to Environment Variables
+2. Add or verify:
+   ```
+   GS_BUCKET_NAME = resq-campus-security
+   GS_PROJECT_ID = gen-lang-client-0117249847
+   GOOGLE_APPLICATION_CREDENTIALS = /path/to/credentials.json
+   ```
+
+3. Make sure service account JSON file is in the repo and path is correct
+
+### Step 3: Fix Images Already in Database
+
+For existing broken records:
+
+```bash
+python manage.py shell
+```
+
+Then:
+
+```python
+from incidents.models import IncidentImage
+
+# Delete all broken image records
+# (they have DB entries but files don't exist in GCS)
+broken = IncidentImage.objects.all()
+print(f"Deleting {broken.count()} broken image records...")
+broken.delete()
+print("Done. New uploads will use correct storage.")
+```
+
+### Step 4: Deploy & Test
+
+1. Commit the settings change
+2. Push to Render
+3. Test new image upload via API
+4. Verify files appear in GCS bucket
+
+```bash
+# Check GCS bucket
+gsutil ls gs://resq-campus-security/incidents/
+```
+
+## VERIFICATION
+
+After fix, running the debug script should show:
+
+```
+[STORAGE BACKEND]
+  Class: PublicGoogleCloudStorage  ✓ CORRECT!
+  Bucket: resq-campus-security
+  Has bucket attribute: ✓
+```
+
+And:
+```
+[MODEL SAVE TEST]
+  ✓ Save succeeded
+  Image URL: https://storage.googleapis.com/resq-campus-security/incidents/2026/01/13/...
+  Exists in GCS: ✓ YES
+```
+
+## QUICK CHECK FOR RENDER
+
+SSH into Render container:
+
+```bash
+# Check what storage is being used
+python manage.py shell
+```
+
+Then:
+```python
+from django.conf import settings
+from django.core.files.storage import default_storage
+
+print(f"Storage: {settings.DEFAULT_FILE_STORAGE}")
+print(f"Storage class: {default_storage.__class__}")
+print(f"Media URL: {settings.MEDIA_URL}")
+
+# Should show PublicGoogleCloudStorage, not FileSystemStorage
+```
+
+## FILES MODIFIED
+
+- `campus_security/settings.py` - Fixed GCS_QUERYSTRING_AUTH and storage logic
+- `incidents/models.py` - Simplified save() method
+- `incidents/views.py` - Better error logging
+- `run_debug.py` - Created proper test script
+
+## WHY This Happens on Render But Not Local
+
+Local dev: Might be using defaults or FileSystemStorage for testing
+Render production: Environment variables not passed correctly, falls back to FileSystemStorage
+
+Solution: Explicitly enable GCS backend with defaults OR ensure env vars are set.
+
+## NEXT STEPS
+
+1. Update `settings.py` with the force-GCS logic above
+2. Set GS_BUCKET_NAME and GS_PROJECT_ID in Render environment  
+3. Delete broken image records from production database
+4. Test with new incident upload
+5. Verify files appear in GCS
+
+After this, the "NoSuchKey" error will be gone because:
+- New images go to GCS (not local disk)
+- Database records point to correct GCS paths
+- Frontend can access images directly from GCS

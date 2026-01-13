@@ -10,8 +10,11 @@ services:
       - key: DEBUG
         value: "True"
       - key: DJANGO_SETTINGS_MODULE
-        value: campus_security.settings    # Persistent volume for media uploads
-    disk:
-      name: media_volume
-      mountPath: /opt/render/project/src/media
-      sizeGB: 1
+        value: campus_security.settings
+      - key: GS_BUCKET_NAME
+        value: resq-campus-security
+      - key: GS_PROJECT_ID
+        value: gen-lang-client-0117249847
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /opt/render/project/src/credentials/gen-lang-client-0117249847-eb5558a80732.json
+    # Note: No disk mount needed - images go to Google Cloud Storage

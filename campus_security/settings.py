@@ -26,6 +26,24 @@ if env_file.exists():
     except ImportError:
         pass
 
+# Also load .env.gcs for GCS-specific credentials
+env_gcs_file = Path(__file__).resolve().parent.parent / '.env.gcs'
+if env_gcs_file.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_gcs_file)
+    except ImportError:
+        pass
+
+# Ensure GOOGLE_APPLICATION_CREDENTIALS is set for GCS
+if not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+    creds_path = Path(__file__).resolve().parent.parent / 'credentials' / 'gen-lang-client-0117249847-eb5558a80732.json'
+    if creds_path.exists():
+        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(creds_path)
+        print(f"[GCS] Set GOOGLE_APPLICATION_CREDENTIALS to {creds_path}")
+    else:
+        print(f"[GCS] WARNING: Credentials file not found at {creds_path}")
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -161,28 +179,32 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 GS_BUCKET_NAME = config('GS_BUCKET_NAME', default='resq-campus-security')
 GS_PROJECT_ID = config('GS_PROJECT_ID', default='gen-lang-client-0117249847')
 GS_CREDENTIALS = None  # Will use GOOGLE_APPLICATION_CREDENTIALS env var
-# Use signed URLs for temporary access (better security than public access)
-GS_QUERYSTRING_AUTH = True  # Use query string auth with signed URLs
+# Use PUBLIC URLs for image access (not signed URLs)
+GS_QUERYSTRING_AUTH = False
 
-# Determine storage backend based on environment
-if GS_BUCKET_NAME and GS_PROJECT_ID:
-    print("[OK] GOOGLE CLOUD STORAGE CONFIGURED")
-    print("   Bucket: {}".format(GS_BUCKET_NAME))
-    print("   Project: {}".format(GS_PROJECT_ID))
-    print("   Using signed URLs for secure image access")
-    DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
-    # Media URL for GCS storage - django-storages will handle URL generation
-    MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
-else:
-    print("[WARNING] GOOGLE CLOUD STORAGE NOT FULLY CONFIGURED")
-    print("   GS_BUCKET_NAME: {}".format(GS_BUCKET_NAME))
-    print("   GS_PROJECT_ID: {}".format(GS_PROJECT_ID))
-    print("   Using local disk storage as fallback")
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
-    MEDIA_URL = '/media/'
+# Django 5.2+ uses STORAGES dict instead of DEFAULT_FILE_STORAGE (for backwards compatibility)
+STORAGES = {
+    'default': {
+        'BACKEND': 'storages.backends.gcloud.GoogleCloudStorage',
+        'OPTIONS': {
+            'bucket_name': GS_BUCKET_NAME,
+            'project_id': GS_PROJECT_ID,
+        },
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+    },
+}
 
-# Media files directory in GCS
-MEDIA_ROOT = 'media'
+# Legacy DEFAULT_FILE_STORAGE for backwards compatibility
+DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
+
+# Note: No MEDIA_ROOT needed - GCS doesn't use local disk
+
+print("[STORAGE] Using storages.backends.gcloud.GoogleCloudStorage")
+print("   Bucket: {}".format(GS_BUCKET_NAME))
+print("   Project: {}".format(GS_PROJECT_ID))
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB

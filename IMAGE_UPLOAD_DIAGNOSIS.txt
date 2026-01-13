@@ -1,0 +1,210 @@
+IMAGE UPLOAD DIAGNOSIS
+======================
+
+## THE PROBLEM
+
+Database has image records like:
+```
+6e4bd95c-c3c0-41e2-9317-db1b7c5a3f28.jpeg
+```
+
+But GCS returns:
+```
+NoSuchKey: No such object: resq-campus-security/incidents/2026/01/13/6e4bd95c-c3c0-41e2-9317-db1b7c5a3f28.jpeg
+```
+
+**Cause**: Database saved the record but file was never uploaded to GCS
+
+## DIAGNOSIS STEPS
+
+### Step 1: Run Debug Script
+```bash
+python manage.py shell < debug_image_upload.py
+```
+
+This will show:
+- ✓ File created successfully
+- ✓ Storage backend connected to GCS
+- ✓ Direct storage save working (if it works)
+- ✓ Model save working
+- ✓ File exists in GCS after save
+- ✓ URL retrieval working
+
+### Step 2: Check Environment Variables
+```bash
+# Verify GCS credentials are set
+python -c "import os; print(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))"
+
+# Should print path to credentials JSON file
+```
+
+### Step 3: Check Service Account Permissions
+```bash
+# Verify service account can write to bucket
+gcloud storage ls gs://resq-campus-security/
+gcloud storage objects upload test.txt gs://resq-campus-security/
+
+# Should succeed without permission errors
+```
+
+### Step 4: Check Django Settings
+```bash
+python manage.py shell
+```
+
+Then in shell:
+```python
+from django.conf import settings
+print(f"Storage: {settings.DEFAULT_FILE_STORAGE}")
+print(f"Bucket: {settings.GS_BUCKET_NAME}")
+print(f"Project: {settings.GS_PROJECT_ID}")
+```
+
+Should show:
+- Storage: campus_security.storage.PublicGoogleCloudStorage
+- Bucket: resq-campus-security
+- Project: (your GCP project ID)
+
+## SOLUTIONS
+
+### If Debug Script Shows "Direct save succeeded" but "Model save failed":
+
+**Problem**: Storage works, but model upload fails
+
+**Fix**: Check storage backend configuration
+```bash
+# In campus_security/storage.py, add debugging
+def url(self, name):
+    print(f"[DEBUG] Getting URL for: {name}")
+    if not name:
+        raise ValueError("Missing 'name' argument")
+    
+    blob = self.bucket.blob(name)
+    print(f"[DEBUG] Blob exists: {blob.exists()}")
+    
+    return f"https://storage.googleapis.com/{self.bucket.name}/{blob.name}"
+```
+
+Then check logs when uploading.
+
+### If Debug Script Shows "File never reaches GCS":
+
+**Problem**: File save is silent failure
+
+**Possible causes:**
+1. GCS credentials not loaded
+2. Service account lacks write permissions
+3. File upload middleware not working
+
+**Fix 1**: Check credentials in environment
+```python
+# In Django shell
+import os
+from google.oauth2 import service_account
+
+cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+print(f"Credentials file: {cred_path}")
+print(f"File exists: {os.path.exists(cred_path)}")
+
+# Try to load
+if cred_path:
+    creds = service_account.Credentials.from_service_account_file(cred_path)
+    print(f"Loaded credentials: {creds.service_account_email}")
+```
+
+**Fix 2**: Check bucket permissions
+```bash
+# List current permissions
+gsutil iam get gs://resq-campus-security/
+
+# Should show service account with storage.objects.create role
+```
+
+**Fix 3**: Check if file is being read correctly
+```python
+# In debug_image_upload.py, add:
+print(f"File size before save: {image_io.getbuffer().nbytes}")
+image_io.seek(0)
+incident_image.save()
+print(f"File size after seek: {image_io.getbuffer().nbytes}")
+```
+
+### If "Model save succeeded" but "File not in GCS":
+
+**Problem**: Django saved record but GCS didn't receive file
+
+**Possible causes:**
+1. Async upload issue (file being streamed)
+2. GCS client not closing connection properly
+3. Bucket object-level ACL issues
+
+**Fix**: Force file to be fully uploaded before returning
+```python
+# In incidents/models.py IncidentImage.save()
+def save(self, *args, **kwargs):
+    # Save to database
+    super().save(*args, **kwargs)
+    
+    # Verify file exists in GCS
+    if self.image and hasattr(self.image.storage, 'bucket'):
+        max_retries = 3
+        for attempt in range(max_retries):
+            blob = self.image.storage.bucket.blob(self.image.name)
+            if blob.exists():
+                blob.make_public()
+                break
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(1)  # Wait 1 second before retry
+        else:
+            raise Exception(f"File not found in GCS after {max_retries} attempts")
+```
+
+## QUICK TEST
+
+Once you fix the issue, test with this:
+
+```bash
+# Upload new incident via API
+# Then check if file exists in GCS
+gsutil ls gs://resq-campus-security/incidents/2026/01/*/
+
+# Should show recent files
+```
+
+## FILES TO CHECK
+
+1. **campus_security/storage.py** - GCS backend configuration
+2. **incidents/models.py** - IncidentImage.save() method
+3. **incidents/views.py** - Image upload handling
+4. **campus_security/settings.py** - GCS environment config
+5. **.env or environment** - GCS credentials path
+
+## VERIFICATION COMMAND
+
+```bash
+# After uploading new incident, verify file exists
+python manage.py shell
+```
+
+Then:
+```python
+from incidents.models import IncidentImage
+from django.core.files.storage import default_storage
+
+# Get latest image
+img = IncidentImage.objects.latest('id')
+print(f"Image in DB: {img.image.name}")
+
+# Check if file exists in GCS
+blob = default_storage.bucket.blob(img.image.name)
+print(f"Exists in GCS: {blob.exists()}")
+
+# Try to download (will fail if not public)
+try:
+    print(f"URL: {img.image.url}")
+except Exception as e:
+    print(f"URL Error: {e}")
+```
+
+If `blob.exists()` returns False, the file never reached GCS.
