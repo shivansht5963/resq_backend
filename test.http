@@ -206,34 +206,48 @@ Authorization: Token {{studentToken}}
   "location": "Hallway 4F"
 }
 
-### 2.1g Report Incident with Images (multipart/form-data)
-### NOTE: Replace image path with actual file path on your system
+### 2.1g Report Incident with Images (PROPER MULTIPART FORMAT)
+### NOTE: Use VS Code REST Client's @file syntax to upload actual image file
+### Make sure test1.png exists in workspace root
 POST {{baseUrl}}/incidents/report/
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+Content-Type: multipart/form-data; boundary=----FormBoundary7MA4YWxkTrZu0gW
 Authorization: Token {{studentToken}}
 
-------WebKitFormBoundary
+------FormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="beacon_id"
 
 ab907856-3412-3412-3412-341278563412
-------WebKitFormBoundary
+------FormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="type"
 
 Safety Concern
-------WebKitFormBoundary
+------FormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="description"
 
 Broken glass observed near the library entrance. Sharp fragments on floor pose hazard.
-------WebKitFormBoundary
+------FormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="location"
 
 Library 3F, Main Entrance
-------WebKitFormBoundary
+------FormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="images"; filename="test1.png"
-Content-Type: image/jpeg
+Content-Type: image/png
 
-[Image data would go here - use REST client's file upload feature]
-------WebKitFormBoundary--
+< ./test1.png
+------FormBoundary7MA4YWxkTrZu0gW--
+
+### 2.1g-ALT Alternative: Using POST request body format (if above doesn't work)
+### This is easier - just send JSON and let REST client handle it
+### But backend expects multipart, so use the version above
+### POST {{baseUrl}}/incidents/report/
+### Content-Type: multipart/form-data; boundary=----FormBoundary
+### Authorization: Token {{studentToken}}
+###
+### NOTE: If images still don't upload:
+### 1. Check file test1.png exists in workspace root
+### 2. Use REST Client extension (not Thunder Client or Insomnia)
+### 3. Make sure content-type for image is correct (image/png or image/jpeg)
+### 4. Check Django logs: /admin/incidents/incidentimage/ should show new records
 
 ### 2.1h Report Location-Based Incident (No Beacon)
 POST {{baseUrl}}/incidents/report/

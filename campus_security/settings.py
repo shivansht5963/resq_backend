@@ -185,7 +185,7 @@ GS_QUERYSTRING_AUTH = False
 # Django 5.2+ uses STORAGES dict instead of DEFAULT_FILE_STORAGE (for backwards compatibility)
 STORAGES = {
     'default': {
-        'BACKEND': 'storages.backends.gcloud.GoogleCloudStorage',
+        'BACKEND': 'campus_security.storage.PublicGoogleCloudStorage',
         'OPTIONS': {
             'bucket_name': GS_BUCKET_NAME,
             'project_id': GS_PROJECT_ID,
@@ -197,7 +197,7 @@ STORAGES = {
 }
 
 # Legacy DEFAULT_FILE_STORAGE for backwards compatibility
-DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
 MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
 
 # Note: No MEDIA_ROOT needed - GCS doesn't use local disk
