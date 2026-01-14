@@ -72,7 +72,8 @@ class IncidentSignalSerializer(serializers.ModelSerializer):
             return {
                 'id': str(obj.source_user.id),
                 'full_name': obj.source_user.full_name,
-                'email': obj.source_user.email
+                'email': obj.source_user.email,
+                'phone_number': obj.source_user.phone_number
             }
         return None
 
@@ -91,7 +92,8 @@ class MessageSerializer(serializers.ModelSerializer):
         return {
             'id': str(obj.sender.id),
             'full_name': obj.sender.full_name,
-            'email': obj.sender.email
+            'email': obj.sender.email,
+            'phone_number': obj.sender.phone_number
         }
 
 

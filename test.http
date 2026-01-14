@@ -2,7 +2,7 @@
 ### Install: REST Client extension for VS Code
 ### Usage: Click "Send Request" above each request or Ctrl+Alt+R
 
-@baseUrl = http://localhost:8000/api
+@baseUrl = https://resq-server.onrender.com/api
 @studentToken = 0ae475f9cf39e1134b4003d17a2b1b9f47b1e386
 @guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
 @adminToken = your_admin_token_here
@@ -104,6 +104,70 @@ Content-Type: application/json
 ###############################################
 ### 1. AUTHENTICATION ENDPOINTS
 ###############################################
+
+### 1.0 Signup New Student (with phone number)
+POST {{baseUrl}}/auth/signup/
+Content-Type: application/json
+
+{
+  "email": "newstudent@example.com",
+  "full_name": "Alice Johnson",
+  "phone_number": "9876543210",
+  "role": "STUDENT",
+  "password": "SecurePass123",
+  "password2": "SecurePass123"
+}
+
+### 1.0b Signup New Student (without phone number - optional)
+POST {{baseUrl}}/auth/signup/
+Content-Type: application/json
+
+{
+  "email": "bob.student@example.com",
+  "full_name": "Bob Smith",
+  "role": "STUDENT",
+  "password": "SecurePass456",
+  "password2": "SecurePass456"
+}
+
+### 1.0c Signup New Guard
+POST {{baseUrl}}/auth/signup/
+Content-Type: application/json
+
+{
+  "email": "newguard@example.com",
+  "full_name": "Charlie Guard",
+  "phone_number": "9123456789",
+  "role": "GUARD",
+  "password": "GuardPass789",
+  "password2": "GuardPass789"
+}
+
+### 1.0d Signup with Invalid Phone (not 10 digits - should fail)
+POST {{baseUrl}}/auth/signup/
+Content-Type: application/json
+
+{
+  "email": "invalid@example.com",
+  "full_name": "Invalid User",
+  "phone_number": "123456",
+  "role": "STUDENT",
+  "password": "SecurePass123",
+  "password2": "SecurePass123"
+}
+
+### 1.0e Signup with Mismatched Passwords (should fail)
+POST {{baseUrl}}/auth/signup/
+Content-Type: application/json
+
+{
+  "email": "mismatch@example.com",
+  "full_name": "Mismatch User",
+  "phone_number": "9876543210",
+  "role": "STUDENT",
+  "password": "SecurePass123",
+  "password2": "DifferentPass456"
+}
 
 ### 1.1 Login as Student
 POST {{baseUrl}}/auth/login/

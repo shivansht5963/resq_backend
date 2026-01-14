@@ -49,6 +49,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'id': obj.sender.id,
             'email': obj.sender.email,
             'full_name': obj.sender.full_name,
+            'phone_number': obj.sender.phone_number,
             'role': obj.sender.role
         }
 

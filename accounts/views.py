@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from .serializers import (
     LoginSerializer, 
+    UserCreateSerializer,
     DeviceSerializer, 
     DeviceRegisterSerializer, 
     DeviceUnregisterSerializer
@@ -43,6 +44,54 @@ def login(request):
             'user_id': str(user.id),
             'role': user.role,
         }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+def signup(request):
+    """
+    User signup endpoint - create new user account.
+    
+    Request:
+        {
+            "email": "student@example.com",
+            "full_name": "John Doe",
+            "phone_number": "9876543210",  (optional, 10 digits only for Indian numbers)
+            "role": "STUDENT",  (STUDENT, GUARD, or ADMIN)
+            "password": "SecurePass123",
+            "password2": "SecurePass123"
+        }
+    
+    Response (201 Created):
+        {
+            "id": "user-uuid",
+            "email": "student@example.com",
+            "full_name": "John Doe",
+            "phone_number": "9876543210",
+            "role": "STUDENT",
+            "auth_token": "token_string"
+        }
+    
+    Response (400 Bad Request):
+        {
+            "field_name": ["error message"]
+        }
+    """
+    serializer = UserCreateSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        user = serializer.save()
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'id': str(user.id),
+            'email': user.email,
+            'full_name': user.full_name,
+            'phone_number': user.phone_number,
+            'role': user.role,
+            'auth_token': token.key,
+        }, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

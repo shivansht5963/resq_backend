@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'full_name', 'role', 'is_active', 'created_at', 'updated_at')
+        fields = ('id', 'email', 'full_name', 'phone_number', 'role', 'is_active', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 
@@ -20,7 +20,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('email', 'full_name', 'role', 'password', 'password2')
+        fields = ('email', 'full_name', 'phone_number', 'role', 'password', 'password2')
+
+    def validate_phone_number(self, value):
+        if value and (not value.isdigit() or len(value) != 10):
+            raise serializers.ValidationError("Phone number must be exactly 10 digits.")
+        return value
 
     def validate(self, data):
         if data['password'] != data['password2']:
@@ -46,7 +51,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'email', 'full_name', 'role', 'is_active', 'is_staff',
+            'id', 'email', 'full_name', 'phone_number', 'role', 'is_active', 'is_staff',
             'created_at', 'updated_at',
             'incidents_reported', 'guard_profile', 'assignments', 'device_tokens', 'sent_messages'
         )
