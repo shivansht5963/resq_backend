@@ -105,6 +105,13 @@ class Incident(models.Model):
         RESOLVED_BY_GUARD = "RESOLVED_BY_GUARD", "Resolved by Guard"
         ESCALATED_TO_ADMIN = "ESCALATED_TO_ADMIN", "Escalated to Admin"
     
+    class BuzzerStatus(models.TextChoices):
+        INACTIVE = "INACTIVE", "Inactive (No Incident)"
+        PENDING = "PENDING", "Pending (Incident Created, No Guard Yet)"
+        ACTIVE = "ACTIVE", "Active (Incident Assigned to Guard)"
+        ACKNOWLEDGED = "ACKNOWLEDGED", "Acknowledged (Guard En Route)"
+        RESOLVED = "RESOLVED", "Resolved (Incident Complete)"
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     beacon = models.ForeignKey(
         Beacon,
@@ -167,6 +174,19 @@ class Incident(models.Model):
         help_text="Currently assigned guard"
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    
+    # Buzzer Status for IoT devices (ESP32)
+    buzzer_status = models.CharField(
+        max_length=20,
+        choices=BuzzerStatus.choices,
+        default=BuzzerStatus.INACTIVE,
+        db_index=True,
+        help_text="Current buzzer status for ESP32 devices at this beacon"
+    )
+    buzzer_last_updated = models.DateTimeField(
+        auto_now=True,
+        help_text="Last time buzzer status was changed"
+    )
     
     # Alert stats
     total_alerts_sent = models.PositiveIntegerField(default=0, help_text="Total alerts sent to guards")

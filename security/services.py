@@ -326,6 +326,10 @@ def handle_guard_alert_accepted_via_proximity(alert):
         if incident.status == Incident.Status.CREATED:
             incident.status = Incident.Status.ASSIGNED
             incident.save(update_fields=['status'])
+            
+            # Update buzzer status to ACTIVE (guard assigned)
+            from incidents.services import update_buzzer_status_on_guard_assignment
+            update_buzzer_status_on_guard_assignment(incident, alert.guard)
         
         # 6. Mark other ASSIGNMENT alerts as expired (guard is now assigned)
         GuardAlert.objects.filter(

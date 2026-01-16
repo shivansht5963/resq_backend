@@ -12,6 +12,10 @@ router.register(r'beacons', views.BeaconViewSet, basename='beacon')
 router.register(r'incidents', views.IncidentViewSet, basename='incident')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    # Public endpoints (no auth required) - must come BEFORE router
+    path('incidents/buzzer-status/', views.buzzer_status_endpoint, name='buzzer-status'),
     path('panic/', views.panic_button_endpoint, name='panic-button'),
+    
+    # Router endpoints (may require auth)
+    path('', include(router.urls)),
 ]

@@ -75,19 +75,79 @@ class IncidentSignalInline(admin.TabularInline):
 
 @admin.register(Beacon)
 class BeaconAdmin(admin.ModelAdmin):
-    list_display = ('location_name', 'building', 'floor', 'uuid', 'major', 'minor', 'is_active')
+    list_display = ('location_name', 'building', 'floor', 'uuid', 'major', 'minor', 'buzzer_status_display', 'is_active')
     list_filter = ('building', 'floor', 'is_active')
-    search_fields = ('location_name', 'uuid', 'building')
+    search_fields = ('location_name', 'uuid', 'building', 'beacon_id')
     ordering = ('building', 'floor')
-    readonly_fields = ('id', 'created_at', 'updated_at')
+    readonly_fields = ('id', 'created_at', 'updated_at', 'active_incidents_display')
     inlines = [BeaconProximityInline]
     fieldsets = (
         ('Location Info', {'fields': ('location_name', 'building', 'floor')}),
         ('Beacon Identifiers', {'fields': ('uuid', 'major', 'minor', 'beacon_id')}),
         ('Coordinates', {'fields': ('latitude', 'longitude')}),
         ('Status', {'fields': ('is_active',)}),
+        ('Active Incidents & Buzzer', {'fields': ('active_incidents_display',)}),
         ('Timestamps', {'fields': ('id', 'created_at', 'updated_at')}),
     )
+    
+    def buzzer_status_display(self, obj):
+        """Display buzzer ON/OFF status - Green=ON, Red=OFF."""
+        active_incidents = obj.incidents.filter(
+            status__in=[Incident.Status.CREATED, Incident.Status.ASSIGNED, Incident.Status.IN_PROGRESS]
+        )
+        
+        if not active_incidents.exists():
+            return format_html(
+                '<span style="background-color: #dc3545; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold;">OFF</span>'
+            )
+        
+        # Get most recent incident
+        incident = active_incidents.order_by('-created_at').first()
+        
+        # Check if buzzer should be active
+        should_buzz = incident.buzzer_status in [
+            Incident.BuzzerStatus.PENDING,
+            Incident.BuzzerStatus.ACTIVE
+        ]
+        
+        if should_buzz:
+            return format_html(
+                '<span style="background-color: #28a745; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold;">ON</span>'
+            )
+        else:
+            return format_html(
+                '<span style="background-color: #dc3545; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold;">OFF</span>'
+            )
+    buzzer_status_display.short_description = 'Buzzer'
+    
+    def active_incidents_display(self, obj):
+        """Display all active incidents at this beacon with clickable links."""
+        active_incidents = obj.incidents.filter(
+            status__in=[Incident.Status.CREATED, Incident.Status.ASSIGNED, Incident.Status.IN_PROGRESS]
+        ).order_by('-created_at')
+        
+        if not active_incidents.exists():
+            return '<p style="color: #28a745;"><strong>✓ No active incidents at this beacon</strong></p>'
+        
+        html = '<div style="background: #f5f5f5; padding: 10px; border-radius: 5px;"><strong>Active Incidents:</strong><br><br>'
+        
+        for incident in active_incidents:
+            status_emoji = '🔴' if incident.buzzer_status in [Incident.BuzzerStatus.PENDING, Incident.BuzzerStatus.ACTIVE] else '✓'
+            
+            incident_url = f'/admin/incidents/incident/{incident.id}/change/'
+            html += f'''
+            <div style="background: white; padding: 8px; margin: 5px 0; border-left: 4px solid #007bff;">
+                {status_emoji} <a href="{incident_url}" style="color: #007bff; text-decoration: none;"><strong>{str(incident.id)[:8]}...</strong></a>
+                <br>
+                <small>Status: <strong>{incident.get_status_display()}</strong> | Priority: <strong>{incident.priority}</strong></small>
+                <br>
+                <small>Buzzer: <strong style="color: #dc3545;">{incident.get_buzzer_status_display()}</strong> | Created: <strong>{incident.created_at.strftime('%Y-%m-%d %H:%M')}</strong></small>
+            </div>
+            '''
+        
+        html += '</div>'
+        return format_html(html)
+    active_incidents_display.short_description = '📊 Active Incidents & Buzzer Status'
 
 
 @admin.register(PhysicalDevice)
@@ -107,17 +167,21 @@ class PhysicalDeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'report_type', 'location', 'signal_count', 'image_count', 'resolved_at')
-    list_filter = ('status', 'priority', 'report_type', 'resolution_type', 'created_at', 'beacon__building')
+    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'buzzer_status_display', 'report_type', 'location', 'signal_count', 'image_count', 'resolved_at')
+    list_filter = ('status', 'priority', 'buzzer_status', 'report_type', 'resolution_type', 'created_at', 'beacon__building')
     search_fields = ('id', 'beacon__location_name', 'beacon__beacon_id', 'description', 'location', 'report_type')
     ordering = ('-created_at',)
-    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at', 'total_alerts_sent', 'total_alerts_declined')
+    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at', 'total_alerts_sent', 'total_alerts_declined', 'buzzer_last_updated')
     inlines = [IncidentSignalInline, IncidentImageInline]
     fieldsets = (
         ('Location', {'fields': ('beacon', 'location')}),
         ('Report Info', {'fields': ('report_type', 'description')}),
         ('Status', {'fields': ('status', 'priority')}),
         ('Assignment', {'fields': ('current_assigned_guard', 'assigned_at')}),
+        ('Buzzer Control', {
+            'fields': ('buzzer_status', 'buzzer_last_updated'),
+            'description': '🔔 Control buzzer status for IoT devices: INACTIVE (silent), PENDING (just reported), ACTIVE (guard assigned), ACKNOWLEDGED (guard en route), RESOLVED (complete)'
+        }),
         ('Resolution', {'fields': ('resolved_by', 'resolved_at', 'resolution_type', 'resolution_notes')}),
         ('Alert Stats', {'fields': ('total_alerts_sent', 'total_alerts_declined')}),
         ('Timestamps', {'fields': ('first_signal_time', 'last_signal_time', 'created_at', 'updated_at')}),
@@ -138,6 +202,35 @@ class IncidentAdmin(admin.ModelAdmin):
     def image_count(self, obj):
         return obj.images.count()
     image_count.short_description = 'Images'
+    
+    def buzzer_status_display(self, obj):
+        """Display buzzer status with color indicator."""
+        status_colors = {
+            Incident.BuzzerStatus.INACTIVE: '#28a745',      # Green
+            Incident.BuzzerStatus.PENDING: '#ffc107',        # Amber/Yellow
+            Incident.BuzzerStatus.ACTIVE: '#dc3545',         # Red
+            Incident.BuzzerStatus.ACKNOWLEDGED: '#fd7e14',   # Orange
+            Incident.BuzzerStatus.RESOLVED: '#6c757d',       # Gray
+        }
+        
+        status_icons = {
+            Incident.BuzzerStatus.INACTIVE: '✓',             # Check mark
+            Incident.BuzzerStatus.PENDING: '⏳',              # Hourglass
+            Incident.BuzzerStatus.ACTIVE: '🔴',              # Red dot
+            Incident.BuzzerStatus.ACKNOWLEDGED: '🟠',        # Orange dot
+            Incident.BuzzerStatus.RESOLVED: '✓',             # Check mark
+        }
+        
+        color = status_colors.get(obj.buzzer_status, '#999')
+        icon = status_icons.get(obj.buzzer_status, '?')
+        
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold;">{} {}</span>',
+            color,
+            icon,
+            obj.get_buzzer_status_display()
+        )
+    buzzer_status_display.short_description = '🔔 Buzzer'
 
 
 @admin.register(BeaconProximity)

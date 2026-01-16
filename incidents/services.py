@@ -309,6 +309,9 @@ def get_or_create_incident_with_signals(
             }
         )
         
+        # Update buzzer status to PENDING (new incident, no guard yet)
+        update_buzzer_status_on_incident_created(incident)
+        
         logger.info(
             f"[NEW] Created incident {incident.id} with signal {signal_type}",
             extra={'beacon_id': str(beacon.id), 'incident_id': str(incident.id)}
@@ -671,3 +674,76 @@ def get_alert_fanout_rules(incident):
             'requires_response': True,
             'max_guards': 2,
         }
+
+
+# =============================================================================
+# BUZZER STATUS MANAGEMENT
+# =============================================================================
+
+def update_buzzer_status_on_incident_created(incident):
+    """
+    Update buzzer status when new incident is created.
+    Sets status to PENDING (incident exists but no guard assigned yet).
+    
+    Args:
+        incident: Incident instance (just created)
+    """
+    incident.buzzer_status = Incident.BuzzerStatus.PENDING
+    incident.save(update_fields=['buzzer_status', 'buzzer_last_updated'])
+    
+    logger.info(
+        f"[BUZZER] Set status to PENDING for incident {str(incident.id)[:8]}",
+        extra={'incident_id': str(incident.id), 'beacon_id': str(incident.beacon.id)}
+    )
+
+
+def update_buzzer_status_on_guard_assignment(incident, guard):
+    """
+    Update buzzer status when guard is assigned to incident.
+    Sets status to ACTIVE (guard assigned and responding).
+    
+    Args:
+        incident: Incident instance
+        guard: User instance (guard who was assigned)
+    """
+    incident.buzzer_status = Incident.BuzzerStatus.ACTIVE
+    incident.save(update_fields=['buzzer_status', 'buzzer_last_updated'])
+    
+    logger.info(
+        f"[BUZZER] Set status to ACTIVE for incident {str(incident.id)[:8]} (Guard: {guard.full_name})",
+        extra={'incident_id': str(incident.id), 'guard_id': str(guard.id)}
+    )
+
+
+def update_buzzer_status_on_incident_acknowledged(incident):
+    """
+    Update buzzer status when guard acknowledges incident (en route).
+    Sets status to ACKNOWLEDGED (guard confirmed and en route).
+    
+    Args:
+        incident: Incident instance
+    """
+    incident.buzzer_status = Incident.BuzzerStatus.ACKNOWLEDGED
+    incident.save(update_fields=['buzzer_status', 'buzzer_last_updated'])
+    
+    logger.info(
+        f"[BUZZER] Set status to ACKNOWLEDGED for incident {str(incident.id)[:8]}",
+        extra={'incident_id': str(incident.id)}
+    )
+
+
+def update_buzzer_status_on_incident_resolved(incident):
+    """
+    Update buzzer status when incident is marked as RESOLVED.
+    Sets status to RESOLVED (incident complete, stop buzzer).
+    
+    Args:
+        incident: Incident instance
+    """
+    incident.buzzer_status = Incident.BuzzerStatus.RESOLVED
+    incident.save(update_fields=['buzzer_status', 'buzzer_last_updated'])
+    
+    logger.info(
+        f"[BUZZER] Set status to RESOLVED for incident {str(incident.id)[:8]}",
+        extra={'incident_id': str(incident.id)}
+    )

@@ -5,6 +5,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.http import JsonResponse
 from django.db import transaction
 from .models import Beacon, Incident, IncidentSignal, PhysicalDevice, IncidentImage
 from .serializers import (
@@ -391,6 +392,10 @@ class IncidentViewSet(viewsets.ModelViewSet):
         incident.resolution_type = resolution_type
         incident.save()
         
+        # Update buzzer status to RESOLVED (incident complete, stop buzzer)
+        from .services import update_buzzer_status_on_incident_resolved
+        update_buzzer_status_on_incident_resolved(incident)
+        
         # Deactivate any active assignment
         deactivated = GuardAssignment.objects.filter(
             incident=incident,
@@ -666,3 +671,51 @@ def panic_button_endpoint(request):
     }
     
     return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def buzzer_status_endpoint(request):
+    """
+    Public ESP32 Buzzer Status Polling Endpoint - NO AUTHENTICATION REQUIRED
+    
+    GET /api/incidents/buzzer-status/?beacon_id=<beacon_id>
+    
+    Query Parameters:
+    - beacon_id: Hardware beacon ID (REQUIRED)
+    
+    Response (200 OK):
+    {
+        "incident_active": true   # or false
+    }
+    """
+    beacon_id = request.query_params.get('beacon_id', '').strip()
+    
+    if not beacon_id:
+        return JsonResponse({'incident_active': False}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
+    except Beacon.DoesNotExist:
+        return JsonResponse({'incident_active': False}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get all ACTIVE incidents for this beacon (not resolved)
+    active_incidents = Incident.objects.filter(
+        beacon=beacon,
+        status__in=[Incident.Status.CREATED, Incident.Status.ASSIGNED, Incident.Status.IN_PROGRESS]
+    ).order_by('-created_at')
+    
+    # If no active incidents, buzzer is inactive
+    if not active_incidents.exists():
+        return JsonResponse({'incident_active': False})
+    
+    # Get the most recent incident
+    incident = active_incidents.first()
+    
+    # Determine if buzzer should be active
+    should_buzz = incident.buzzer_status in [
+        Incident.BuzzerStatus.PENDING,
+        Incident.BuzzerStatus.ACTIVE
+    ]
+    
+    return JsonResponse({'incident_active': should_buzz})

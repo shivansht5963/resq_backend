@@ -2,7 +2,7 @@
 ### Install: REST Client extension for VS Code
 ### Usage: Click "Send Request" above each request or Ctrl+Alt+R
 
-@baseUrl = https://resq-server.onrender.com/api
+@baseUrl = http://127.0.0.1:8000/api
 @studentToken = 0ae475f9cf39e1134b4003d17a2b1b9f47b1e386
 @guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
 @adminToken = your_admin_token_here
@@ -102,6 +102,238 @@ Content-Type: application/json
 }
 
 ###############################################
+### 0.6 AI DETECTION WITH IMAGES (NEW FEATURE)
+###############################################
+
+### 0.6a Violence Detection with Single Image
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.95
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Violent confrontation detected with weapon - immediate response needed
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="device_id"
+
+AI-VISION-SURVEILLANCE-01
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="violence1.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6b Violence Detection with Multiple Images (3 images max)
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.88
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Multiple suspects involved in altercation - 3 evidence photos attached
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="evidence1.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="evidence2.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="evidence3.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6c Scream Detection with Image
+POST {{baseUrl}}/scream-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+safe:uuid:402:402
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.92
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+High-pitched screaming detected in dormitory with possible distress
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="device_id"
+
+AI-AUDIO-MONITORING-02
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="audio_screenshot.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6d Violence Detection with Images - Below Threshold (logged only, images received)
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+safe:uuid:401:401
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.68
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Uncertain violence detection - below threshold but images provided for review
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="review1.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6e Violence Detection - Missing Required Field (should fail)
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.90
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6f Violence Detection - Too Many Images (should fail with error)
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.90
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Test with 4 images (exceeds limit)
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="image1.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="image2.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="image3.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="image4.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6g Violence Detection with Images - Add to Existing Incident (deduplication test)
+### First, create an incident with images
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.85
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+First violence detection with initial images
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="initial.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample1.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6h Violence Detection - Add More Images to Same Incident (within 5 min window)
+### Should add to existing incident instead of creating new one
+POST {{baseUrl}}/violence-detected/
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="beacon_id"
+
+ab907856-3412-3412-3412-341278563412
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="confidence_score"
+
+0.82
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="description"
+
+Additional evidence - second detection within same incident
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="images"; filename="additional.jpg"
+Content-Type: image/jpeg
+
+< ./test_images/sample2.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### 0.6i Compare Violence Detection (JSON) vs Images (Multipart)
+### Test JSON without images (original way)
+POST {{baseUrl}}/violence-detected/
+Content-Type: application/json
+
+{
+  "beacon_id": "ab907856-3412-3412-3412-341278563412",
+  "confidence_score": 0.91,
+  "description": "Pure JSON violence detection - no images",
+  "device_id": "AI-VISION-JSON"
+}
+
+###############################################
+### 1. AUTHENTICATION ENDPOINTS
+###############################################
+  "device_id": "AI-LEGACY-001"
+}
+
+###############################################
 ### 1. AUTHENTICATION ENDPOINTS
 ###############################################
 
@@ -110,7 +342,7 @@ POST {{baseUrl}}/auth/signup/
 Content-Type: application/json
 
 {
-  "email": "newstudent@example.com",
+  "email": "offer6849@gmail.com",
   "full_name": "Alice Johnson",
   "phone_number": "9876543210",
   "role": "STUDENT",
@@ -560,6 +792,27 @@ Content-Type: application/json
 {
   "device_id": "ESP32-001"
 }
+
+### 5.9 ESP Buzzer Status Poll (No Auth Required - for IoT devices)
+### Returns: {"incident_active": true} or {"incident_active": false}
+### Use this endpoint to poll for active incidents at a beacon location
+### Perfect for ESP32 buzzer control - true = buzz, false = silent
+GET {{baseUrl}}/incidents/buzzer-status/?beacon_id=ab907856-3412-3412-3412-341278563412
+
+### 5.9b ESP Buzzer Status Poll (Library 3F)
+GET {{baseUrl}}/incidents/buzzer-status/?beacon_id=safe:uuid:403:403
+
+### 5.9c ESP Buzzer Status Poll (Hallway 4F)
+GET {{baseUrl}}/incidents/buzzer-status/?beacon_id=safe:uuid:402:402
+
+### 5.9d ESP Buzzer Status Poll (Test beacon - No incident expected)
+GET {{baseUrl}}/incidents/buzzer-status/?beacon_id=test:uuid:3:3
+
+### 5.9e ESP Buzzer Status Poll (Invalid beacon - should return 404)
+GET {{baseUrl}}/incidents/buzzer-status/?beacon_id=invalid:uuid:999:999
+
+### 5.9f ESP Buzzer Status Poll (Missing beacon_id parameter - should return 400)
+GET {{baseUrl}}/incidents/buzzer-status/
 
 ###############################################
 ### 6. BEACON ENDPOINTS
