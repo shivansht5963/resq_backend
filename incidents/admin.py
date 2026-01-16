@@ -167,16 +167,18 @@ class PhysicalDeviceAdmin(admin.ModelAdmin):
 
 @admin.register(Incident)
 class IncidentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority', 'buzzer_status_display', 'report_type', 'location', 'signal_count', 'image_count', 'resolved_at')
+    list_display = ('id', 'beacon_id', 'beacon_location', 'status', 'priority_display', 'has_ai_detection', 'image_count_display', 'signal_count', 'buzzer_status_display', 'created_at')
     list_filter = ('status', 'priority', 'buzzer_status', 'report_type', 'resolution_type', 'created_at', 'beacon__building')
     search_fields = ('id', 'beacon__location_name', 'beacon__beacon_id', 'description', 'location', 'report_type')
     ordering = ('-created_at',)
-    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at', 'total_alerts_sent', 'total_alerts_declined', 'buzzer_last_updated')
+    readonly_fields = ('id', 'first_signal_time', 'last_signal_time', 'created_at', 'updated_at', 'total_alerts_sent', 'total_alerts_declined', 'buzzer_last_updated', 'ai_detection_info', 'images_summary')
     inlines = [IncidentSignalInline, IncidentImageInline]
     fieldsets = (
         ('Location', {'fields': ('beacon', 'location')}),
         ('Report Info', {'fields': ('report_type', 'description')}),
         ('Status', {'fields': ('status', 'priority')}),
+        ('AI Detection', {'fields': ('ai_detection_info',), 'classes': ('collapse',)}),
+        ('Images', {'fields': ('images_summary',)}),
         ('Assignment', {'fields': ('current_assigned_guard', 'assigned_at')}),
         ('Buzzer Control', {
             'fields': ('buzzer_status', 'buzzer_last_updated'),
@@ -193,15 +195,132 @@ class IncidentAdmin(admin.ModelAdmin):
     
     def beacon_location(self, obj):
         return obj.beacon.location_name if obj.beacon else "N/A"
-    beacon_location.short_description = 'Beacon Location'
+    beacon_location.short_description = 'Location'
     
     def signal_count(self, obj):
-        return obj.signals.count()
+        count = obj.signals.count()
+        return format_html(
+            '<span style="background: #17a2b8; color: white; padding: 3px 8px; border-radius: 3px; font-weight: bold;">📡 {}</span>',
+            count
+        )
     signal_count.short_description = 'Signals'
     
     def image_count(self, obj):
         return obj.images.count()
     image_count.short_description = 'Images'
+    
+    def image_count_display(self, obj):
+        """Display image count with indicator."""
+        count = obj.images.count()
+        if count > 0:
+            return format_html(
+                '<span style="background: #28a745; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold;">📷 {} image{}</span>',
+                count,
+                's' if count != 1 else ''
+            )
+        return format_html('<span style="color: #999;">No images</span>')
+    image_count_display.short_description = '📷 Images'
+    
+    def has_ai_detection(self, obj):
+        """Check if this incident was triggered by AI detection."""
+        ai_signals = obj.signals.filter(
+            signal_type__in=['VIOLENCE_DETECTED', 'SCREAM_DETECTED']
+        )
+        if ai_signals.exists():
+            signal = ai_signals.first()
+            if signal.ai_event:
+                return format_html(
+                    '<span style="background: #6f42c1; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold;">🤖 AI: {}</span>',
+                    signal.ai_event.get_event_type_display()
+                )
+        return format_html('<span style="color: #999;">Manual Report</span>')
+    has_ai_detection.short_description = '🤖 AI Detection'
+    
+    def ai_detection_info(self, obj):
+        """Display AI detection information if this incident was triggered by AI."""
+        ai_signals = obj.signals.filter(
+            signal_type__in=['VIOLENCE_DETECTED', 'SCREAM_DETECTED']
+        )
+        
+        if not ai_signals.exists():
+            return format_html(
+                '<div style="background: #f5f5f5; padding: 10px; border-radius: 5px; color: #999;">'
+                'This incident was created manually, not by AI detection.'
+                '</div>'
+            )
+        
+        html = '<div style="background: #f5f5f5; padding: 10px; border-radius: 5px;">'
+        
+        for signal in ai_signals:
+            if signal.ai_event:
+                ai = signal.ai_event
+                confidence_color = '#28a745' if ai.confidence_score >= 0.8 else '#ffc107' if ai.confidence_score >= 0.75 else '#dc3545'
+                
+                html += f'''
+                <div style="background: white; padding: 10px; margin: 5px 0; border-left: 4px solid {confidence_color}; border-radius: 3px;">
+                    <strong>🤖 AI Event #{ai.id}</strong><br>
+                    <strong>Type:</strong> {ai.get_event_type_display()}<br>
+                    <strong>Confidence:</strong> <span style="background: {confidence_color}; color: white; padding: 3px 6px; border-radius: 3px;">{ai.confidence_score:.1%}</span><br>
+                    <strong>Device:</strong> {ai.details.get('device_id', 'Unknown')}<br>
+                    <strong>Description:</strong> {ai.details.get('description', 'N/A')}<br>
+                    <strong>Detected:</strong> {ai.created_at.strftime('%Y-%m-%d %H:%M:%S')}
+                </div>
+                '''
+        
+        html += '</div>'
+        return format_html(html)
+    ai_detection_info.short_description = '🤖 AI Detection Details'
+    
+    def images_summary(self, obj):
+        """Display summary of images attached to this incident."""
+        images = obj.images.all().order_by('-uploaded_at')
+        
+        if not images.exists():
+            return format_html(
+                '<div style="background: #f5f5f5; padding: 10px; border-radius: 5px; color: #999;">'
+                'No images attached to this incident.'
+                '</div>'
+            )
+        
+        html = '<div style="background: #f5f5f5; padding: 10px; border-radius: 5px;">'
+        html += f'<strong>📷 {images.count()} image{"s" if images.count() != 1 else ""} attached:</strong><br><br>'
+        
+        for img in images[:5]:  # Show first 5
+            source = '🤖 AI Detection' if not img.uploaded_by else f'👤 {img.uploaded_by.email}'
+            try:
+                url = img.image.url
+                html += f'''
+                <div style="background: white; padding: 8px; margin: 5px 0; border-left: 4px solid #28a745; border-radius: 3px;">
+                    <strong>#{img.id}</strong> - {source}<br>
+                    <small>{img.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')}</small><br>
+                    <a href="{url}" target="_blank" style="color: #007bff; text-decoration: none; font-size: 12px;">📥 View Full Image</a>
+                </div>
+                '''
+            except Exception as e:
+                html += f'<div style="color: #dc3545;">Error: {str(e)}</div>'
+        
+        if images.count() > 5:
+            html += f'<div style="color: #999; margin-top: 10px;">... and {images.count() - 5} more</div>'
+        
+        html += '</div>'
+        return format_html(html)
+    images_summary.short_description = '📷 Images Summary'
+    
+    def priority_display(self, obj):
+        """Display priority with color."""
+        priority_colors = {
+            1: '#ffc107',  # LOW - yellow
+            2: '#17a2b8',  # MEDIUM - blue
+            3: '#fd7e14',  # HIGH - orange
+            4: '#dc3545',  # CRITICAL - red
+        }
+        color = priority_colors.get(obj.priority, '#999')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold;">{}</span>',
+            color,
+            obj.get_priority_display()
+        )
+    priority_display.short_description = '⚠️ Priority'
     
     def buzzer_status_display(self, obj):
         """Display buzzer status with color indicator."""
@@ -283,14 +402,16 @@ class IncidentSignalAdmin(admin.ModelAdmin):
 
 @admin.register(IncidentImage)
 class IncidentImageAdmin(admin.ModelAdmin):
-    list_display = ('id', 'incident', 'uploaded_by', 'uploaded_at', 'image_preview')
-    list_filter = ('uploaded_at', 'incident__beacon__building')
+    list_display = ('id', 'incident_link', 'get_incident_priority', 'uploaded_by', 'image_source', 'uploaded_at', 'image_preview')
+    list_filter = ('uploaded_at', 'incident__beacon__building', 'incident__priority')
     search_fields = ('incident__id', 'uploaded_by__full_name', 'description')
     ordering = ('-uploaded_at',)
-    readonly_fields = ('id', 'uploaded_at', 'uploaded_by', 'image_preview')
+    readonly_fields = ('id', 'uploaded_at', 'uploaded_by', 'image_preview', 'image_url_display', 'file_info')
     fieldsets = (
         ('Image Info', {'fields': ('incident', 'image', 'image_preview')}),
-        ('Metadata', {'fields': ('uploaded_by', 'description')}),
+        ('Image URL', {'fields': ('image_url_display',)}),
+        ('Metadata', {'fields': ('uploaded_by', 'description', 'image_source')}),
+        ('File Details', {'fields': ('file_info',), 'classes': ('collapse',)}),
         ('Timestamps', {'fields': ('id', 'uploaded_at')}),
     )
     
@@ -300,13 +421,106 @@ class IncidentImageAdmin(admin.ModelAdmin):
             try:
                 image_url = obj.image.url
                 return format_html(
-                    '<img src="{}" width="300" height="200" style="max-width: 100%; height: auto; border-radius: 5px;" alt="Incident image" />',
+                    '<img src="{}" width="400" height="300" style="max-width: 100%; height: auto; border-radius: 5px; border: 2px solid #007bff;" alt="Incident image" />',
                     image_url
                 )
             except Exception as e:
                 return f"Error loading image: {str(e)}"
         return "No image"
     image_preview.short_description = 'Preview'
+    
+    def image_url_display(self, obj):
+        """Display the public GCS URL."""
+        if obj.image:
+            try:
+                url = obj.image.url
+                return format_html(
+                    '<div style="word-break: break-all; font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 5px;">'
+                    '<strong>Public URL:</strong><br>'
+                    '<a href="{}" target="_blank" style="color: #007bff; text-decoration: none;">{}</a>'
+                    '<br><br>'
+                    '<button onclick="navigator.clipboard.writeText(\'{}\');" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">📋 Copy URL</button>'
+                    '</div>',
+                    url,
+                    url,
+                    url
+                )
+            except Exception as e:
+                return f"Error: {str(e)}"
+        return "No URL available"
+    image_url_display.short_description = 'GCS URL'
+    
+    def file_info(self, obj):
+        """Display file information."""
+        if obj.image:
+            try:
+                file_size = obj.image.size
+                file_name = obj.image.name
+                storage = obj.image.storage.__class__.__name__
+                
+                # Format file size
+                if file_size < 1024:
+                    size_str = f"{file_size} bytes"
+                elif file_size < 1024 * 1024:
+                    size_str = f"{file_size / 1024:.2f} KB"
+                else:
+                    size_str = f"{file_size / (1024 * 1024):.2f} MB"
+                
+                return format_html(
+                    '<div style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 5px;">'
+                    '<strong>File Name:</strong> {}<br>'
+                    '<strong>File Size:</strong> {}<br>'
+                    '<strong>Storage:</strong> {}<br>'
+                    '<strong>Path:</strong> {}'
+                    '</div>',
+                    file_name.split('/')[-1],
+                    size_str,
+                    storage,
+                    file_name
+                )
+            except Exception as e:
+                return f"Error: {str(e)}"
+        return "No file"
+    file_info.short_description = 'File Information'
+    
+    def incident_link(self, obj):
+        """Display clickable link to incident."""
+        incident_url = f'/admin/incidents/incident/{obj.incident.id}/change/'
+        return format_html(
+            '<a href="{}" style="color: #007bff; text-decoration: none; font-weight: bold;">🔗 {}</a>',
+            incident_url,
+            str(obj.incident.id)[:8]
+        )
+    incident_link.short_description = 'Incident'
+    
+    def get_incident_priority(self, obj):
+        """Display incident priority with color."""
+        priority_colors = {
+            1: '#ffc107',  # LOW - yellow
+            2: '#17a2b8',  # MEDIUM - blue
+            3: '#fd7e14',  # HIGH - orange
+            4: '#dc3545',  # CRITICAL - red
+        }
+        color = priority_colors.get(obj.incident.priority, '#999')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold;">{}</span>',
+            color,
+            obj.incident.get_priority_display()
+        )
+    get_incident_priority.short_description = '⚠️ Priority'
+    
+    def image_source(self, obj):
+        """Show if image was uploaded by user or AI detection."""
+        if obj.uploaded_by:
+            return format_html(
+                '<span style="background: #007bff; color: white; padding: 3px 8px; border-radius: 3px;">👤 User: {}</span>',
+                obj.uploaded_by.email
+            )
+        else:
+            return format_html(
+                '<span style="background: #6f42c1; color: white; padding: 3px 8px; border-radius: 3px;">🤖 AI Detection</span>'
+            )
+    image_source.short_description = 'Source'
 
 
 @admin.register(IncidentEvent)
