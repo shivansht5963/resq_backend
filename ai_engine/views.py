@@ -1,6 +1,7 @@
 """
 ViewSets for ai_engine app.
 """
+import logging
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -8,6 +9,8 @@ from rest_framework.decorators import api_view, permission_classes
 from .models import AIEvent
 from .serializers import AIEventSerializer, AIEventDetailSerializer
 from accounts.permissions import IsAdmin
+
+logger = logging.getLogger(__name__)
 
 
 class AIEventViewSet(viewsets.ReadOnlyModelViewSet):
@@ -45,6 +48,10 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
     from incidents.models import Beacon, IncidentSignal, PhysicalDevice, IncidentImage
     from incidents.services import get_or_create_incident_with_signals, alert_guards_for_incident
     
+    logger.info(f"[AI DETECTION] Processing {event_type} detection with images")
+    logger.info(f"[AI DETECTION] Request POST data keys: {list(request.POST.keys())}")
+    logger.info(f"[AI DETECTION] Request FILES keys: {list(request.FILES.keys())}")
+    
     # Extract form data (multipart)
     beacon_id = (request.POST.get('beacon_id', '') or '').strip()
     confidence_score = request.POST.get('confidence_score')
@@ -52,22 +59,27 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
     device_id = (request.POST.get('device_id', '') or '').strip()
     images_list = request.FILES.getlist('images', [])
     
+    logger.info(f"[AI DETECTION] Extracted form data: beacon_id={beacon_id}, confidence={confidence_score}, description={description[:50] if description else None}, device={device_id}, images_count={len(images_list)}")
+    
     # Validate required fields
     if not beacon_id:
+        logger.error("[AI DETECTION] Missing beacon_id in request")
         return Response(
-            {'error': 'beacon_id is required'},
+            {'error': 'beacon_id is required', 'detail': 'beacon_id field not provided in form data'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     if confidence_score is None:
+        logger.error("[AI DETECTION] Missing confidence_score in request")
         return Response(
-            {'error': 'confidence_score is required (0.0-1.0)'},
+            {'error': 'confidence_score is required (0.0-1.0)', 'detail': 'confidence_score field not provided in form data'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     if not description:
+        logger.error("[AI DETECTION] Missing description in request")
         return Response(
-            {'error': 'description is required'},
+            {'error': 'description is required', 'detail': 'description field not provided in form data'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -75,29 +87,34 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
     try:
         confidence_score = float(confidence_score)
         if not (0.0 <= confidence_score <= 1.0):
+            logger.error(f"[AI DETECTION] Invalid confidence score: {confidence_score}")
             return Response(
-                {'error': 'confidence_score must be between 0.0 and 1.0'},
+                {'error': 'confidence_score must be between 0.0 and 1.0', 'received': confidence_score},
                 status=status.HTTP_400_BAD_REQUEST
             )
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        logger.error(f"[AI DETECTION] Failed to parse confidence_score: {e}")
         return Response(
-            {'error': 'confidence_score must be a valid number'},
+            {'error': 'confidence_score must be a valid number', 'received': confidence_score},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     # Validate image count
     if len(images_list) > 3:
+        logger.error(f"[AI DETECTION] Too many images: {len(images_list)} (max 3)")
         return Response(
-            {'error': 'Maximum 3 images allowed'},
+            {'error': 'Maximum 3 images allowed', 'received': len(images_list)},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     # Validate beacon exists
     try:
         beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
+        logger.info(f"[AI DETECTION] Beacon found: {beacon.location_name} (ID: {beacon.id})")
     except Beacon.DoesNotExist:
+        logger.error(f"[AI DETECTION] Beacon not found or inactive: {beacon_id}")
         return Response(
-            {'error': f'Beacon {beacon_id} not found or inactive'},
+            {'error': f'Beacon {beacon_id} not found or inactive', 'beacon_id': beacon_id},
             status=status.HTTP_404_NOT_FOUND
         )
     
@@ -106,7 +123,9 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
     if device_id:
         try:
             source_device = PhysicalDevice.objects.get(device_id=device_id, is_active=True)
+            logger.info(f"[AI DETECTION] Device found: {device_id}")
         except PhysicalDevice.DoesNotExist:
+            logger.warning(f"[AI DETECTION] Device not found or inactive: {device_id} (will continue anyway)")
             source_device = None
     
     # Step 1: Always log the AI event
@@ -121,14 +140,17 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
             'images_count': len(images_list)
         }
     )
+    logger.info(f"[AI DETECTION] ✅ AIEvent created: ID={ai_event.id}, type={event_type}, confidence={confidence_score}")
     
     # Step 2: Check confidence threshold
     if confidence_score < confidence_threshold:
+        logger.info(f"[AI DETECTION] Confidence {confidence_score:.2f} below threshold {confidence_threshold} - LOGGED ONLY")
         return Response({
             'status': 'logged_only',
             'ai_event_id': ai_event.id,
             'message': f'Confidence {confidence_score:.2f} below threshold {confidence_threshold}',
-            'images_received': len(images_list)
+            'images_received': len(images_list),
+            'logging': 'AI event logged, incident not created'
         }, status=status.HTTP_200_OK)
     
     # Step 3: Create incident signal
@@ -147,27 +169,24 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
                 'images_count': len(images_list)
             }
         )
+        logger.info(f"[AI DETECTION] {'✅ New' if created else '➕ Existing'} incident: ID={incident.id}, status={incident.status}, priority={incident.priority}")
     except ValueError as e:
+        logger.error(f"[AI DETECTION] Error creating incident: {e}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     # Step 4: Process and attach images
     image_objects = []
-    print(f"\n{'='*60}")
-    print(f"[AI DETECTION IMAGE UPLOAD] Processing {len(images_list)} images for incident {incident.id}")
-    print(f"{'='*60}")
+    logger.info(f"[AI DETECTION IMAGE PROCESSING] Starting - {len(images_list)} images for incident {incident.id}")
     
     for idx, image_file in enumerate(images_list[:3]):
         try:
-            print(f"\n[Image {idx + 1}] Starting upload...")
-            print(f"  File name: {image_file.name}")
-            print(f"  Content type: {image_file.content_type}")
-            print(f"  File size: {image_file.size} bytes")
+            logger.info(f"[AI IMAGE {idx + 1}] File: {image_file.name}, Size: {image_file.size} bytes, Type: {image_file.content_type}")
             
             # Reset file pointer and read to verify
             image_file.seek(0)
             file_data = image_file.read()
             image_file.seek(0)
-            print(f"  ✅ File read: {len(file_data)} bytes")
+            logger.info(f"[AI IMAGE {idx + 1}] File pointer reset and read: {len(file_data)} bytes")
             
             # Save image to GCS
             incident_image = IncidentImage.objects.create(
@@ -177,23 +196,42 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
                 description=f"AI Detection Image {idx + 1} ({event_type})"
             )
             
+            logger.info(f"[AI IMAGE {idx + 1}] IncidentImage object created: ID={incident_image.id}")
+            
             if incident_image.image:
                 stored_url = incident_image.image.url
-                print(f"  ✅ Image {idx + 1} uploaded successfully!")
-                print(f"     GCS URL: {stored_url}")
+                logger.info(f"[AI IMAGE {idx + 1}] ✅ Uploaded to GCS: {stored_url}")
                 image_objects.append(incident_image)
+            else:
+                logger.error(f"[AI IMAGE {idx + 1}] ❌ Image field is empty after creation!")
+                
         except Exception as e:
-            print(f"  ❌ ERROR saving image {idx + 1}: {str(e)}")
+            logger.error(f"[AI IMAGE {idx + 1}] ❌ ERROR: {type(e).__name__}: {str(e)}", exc_info=True)
             continue
     
-    print(f"\n[AI DETECTION IMAGE UPLOAD] Summary: {len(image_objects)} images uploaded")
-    print(f"{'='*60}\n")
+    logger.info(f"[AI DETECTION IMAGE PROCESSING] Complete - {len(image_objects)} out of {len(images_list)} images successfully uploaded")
     
     # Step 5: Alert guards only if incident was newly created
     if created:
-        alert_guards_for_incident(incident)
+        try:
+            alert_guards_for_incident(incident)
+            logger.info(f"[AI DETECTION] Alerts sent to guards for new incident")
+        except Exception as e:
+            logger.error(f"[AI DETECTION] Error sending alerts: {e}")
     
-    # Prepare response
+    # Prepare response with detailed logging info
+    image_urls = []
+    for img in image_objects:
+        try:
+            image_urls.append({
+                'id': img.id,
+                'image': img.image.url,
+                'uploaded_at': img.uploaded_at.isoformat(),
+                'description': img.description
+            })
+        except Exception as e:
+            logger.error(f"[AI DETECTION] Error serializing image {img.id}: {e}")
+    
     response_data = {
         'status': 'incident_created' if created else 'signal_added_to_existing',
         'ai_event_id': ai_event.id,
@@ -203,26 +241,26 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
         'beacon_location': beacon.location_name,
         'incident_status': incident.status,
         'incident_priority': incident.get_priority_display(),
-        'images': [
-            {
-                'id': img.id,
-                'image': img.image.url,
-                'uploaded_at': img.uploaded_at.isoformat(),
-                'description': img.description
-            }
-            for img in image_objects
-        ]
+        'images': image_urls,
+        'images_summary': {
+            'total_requested': len(images_list),
+            'total_uploaded': len(image_objects),
+            'in_database': IncidentImage.objects.filter(incident=incident).count()
+        },
+        'logging': 'See server logs for detailed processing information'
     }
     
     if device_id:
         response_data['device_id'] = device_id
+    
+    logger.info(f"[AI DETECTION] Response: {response_data['status']} - {response_data['images_summary']}")
     
     return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 def _process_ai_detection(request, event_type, signal_type, confidence_threshold, description_required=True):
     """
-    Internal helper for AI detection endpoints.
+    Internal helper for AI detection endpoints (JSON-only).
     
     Args:
         request: HTTP request
@@ -237,25 +275,32 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
     from incidents.models import Beacon, IncidentSignal, PhysicalDevice
     from incidents.services import get_or_create_incident_with_signals, alert_guards_for_incident
     
+    logger.info(f"[AI DETECTION JSON] Processing {event_type} detection (JSON only, no images)")
+    
     beacon_id = request.data.get('beacon_id', '').strip()
     confidence_score = request.data.get('confidence_score')
     description = request.data.get('description', '').strip()
     device_id = request.data.get('device_id', '').strip()
     
+    logger.info(f"[AI DETECTION JSON] Extracted data: beacon={beacon_id}, confidence={confidence_score}, device={device_id}")
+    
     # Validate required fields
     if not beacon_id:
+        logger.error("[AI DETECTION JSON] Missing beacon_id")
         return Response(
             {'error': 'beacon_id is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     if confidence_score is None:
+        logger.error("[AI DETECTION JSON] Missing confidence_score")
         return Response(
             {'error': 'confidence_score is required (0.0-1.0)'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
     if description_required and not description:
+        logger.error("[AI DETECTION JSON] Missing description (required)")
         return Response(
             {'error': 'description is required'},
             status=status.HTTP_400_BAD_REQUEST
@@ -265,11 +310,13 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
     try:
         confidence_score = float(confidence_score)
         if not (0.0 <= confidence_score <= 1.0):
+            logger.error(f"[AI DETECTION JSON] Invalid confidence: {confidence_score}")
             return Response(
                 {'error': 'confidence_score must be between 0.0 and 1.0'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        logger.error(f"[AI DETECTION JSON] Failed to parse confidence: {e}")
         return Response(
             {'error': 'confidence_score must be a valid number'},
             status=status.HTTP_400_BAD_REQUEST
@@ -278,7 +325,9 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
     # Validate beacon exists
     try:
         beacon = Beacon.objects.get(beacon_id=beacon_id, is_active=True)
+        logger.info(f"[AI DETECTION JSON] Beacon found: {beacon.location_name}")
     except Beacon.DoesNotExist:
+        logger.error(f"[AI DETECTION JSON] Beacon not found: {beacon_id}")
         return Response(
             {'error': f'Beacon {beacon_id} not found or inactive'},
             status=status.HTTP_404_NOT_FOUND
@@ -289,8 +338,9 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
     if device_id:
         try:
             source_device = PhysicalDevice.objects.get(device_id=device_id, is_active=True)
+            logger.info(f"[AI DETECTION JSON] Device found: {device_id}")
         except PhysicalDevice.DoesNotExist:
-            # Device not found but continue (optional field)
+            logger.warning(f"[AI DETECTION JSON] Device not found: {device_id}")
             source_device = None
     
     # Step 1: Always log the AI event (for analytics/audit)
@@ -304,9 +354,11 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
             'device_id': device_id if device_id else None
         }
     )
+    logger.info(f"[AI DETECTION JSON] ✅ AIEvent created: ID={ai_event.id}, type={event_type}, confidence={confidence_score}")
     
     # Step 2: Check confidence threshold
     if confidence_score < confidence_threshold:
+        logger.info(f"[AI DETECTION JSON] Confidence {confidence_score:.2f} below threshold {confidence_threshold}")
         return Response({
             'status': 'logged_only',
             'ai_event_id': ai_event.id,
@@ -328,12 +380,18 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
                 'device_id': device_id if device_id else None
             }
         )
+        logger.info(f"[AI DETECTION JSON] {'✅ New' if created else '➕ Existing'} incident: ID={incident.id}, status={incident.status}, priority={incident.priority}")
     except ValueError as e:
+        logger.error(f"[AI DETECTION JSON] Error creating incident: {e}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     # Step 4: Alert guards only if incident was newly created
     if created:
-        alert_guards_for_incident(incident)
+        try:
+            alert_guards_for_incident(incident)
+            logger.info(f"[AI DETECTION JSON] Alerts sent to guards")
+        except Exception as e:
+            logger.error(f"[AI DETECTION JSON] Error sending alerts: {e}")
     
     response_data = {
         'status': 'incident_created' if created else 'signal_added_to_existing',
@@ -348,6 +406,8 @@ def _process_ai_detection(request, event_type, signal_type, confidence_threshold
     
     if device_id:
         response_data['device_id'] = device_id
+    
+    logger.info(f"[AI DETECTION JSON] Response: {response_data['status']}")
     
     return Response(response_data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -411,7 +471,7 @@ def violence_detected(request):
     {
         "status": "logged_only",
         "ai_event_id": 123,
-        "message": "Confidence 0.65 below threshold 0.75"
+        "message": "Confidence 0.15 below threshold 0.2"
     }
     """
     from incidents.models import IncidentSignal, IncidentImage
@@ -425,7 +485,7 @@ def violence_detected(request):
             request,
             event_type=AIEvent.EventType.VIOLENCE,
             signal_type=IncidentSignal.SignalType.VIOLENCE_DETECTED,
-            confidence_threshold=0.75
+            confidence_threshold=0.2
         )
     else:
         # Handle JSON request without images
@@ -433,7 +493,7 @@ def violence_detected(request):
             request,
             event_type=AIEvent.EventType.VIOLENCE,
             signal_type=IncidentSignal.SignalType.VIOLENCE_DETECTED,
-            confidence_threshold=0.75,
+            confidence_threshold=0.2,
             description_required=True
         )
 
@@ -490,7 +550,7 @@ def scream_detected(request):
     {
         "status": "logged_only",
         "ai_event_id": 124,
-        "message": "Confidence 0.72 below threshold 0.80"
+        "message": "Confidence 0.15 below threshold 0.2"
     }
     """
     from incidents.models import IncidentSignal
@@ -504,7 +564,7 @@ def scream_detected(request):
             request,
             event_type=AIEvent.EventType.SCREAM,
             signal_type=IncidentSignal.SignalType.SCREAM_DETECTED,
-            confidence_threshold=0.80
+            confidence_threshold=0.2
         )
     else:
         # Handle JSON request without images
@@ -512,7 +572,7 @@ def scream_detected(request):
             request,
             event_type=AIEvent.EventType.SCREAM,
             signal_type=IncidentSignal.SignalType.SCREAM_DETECTED,
-            confidence_threshold=0.80,
+            confidence_threshold=0.2,
             description_required=True
         )
 
