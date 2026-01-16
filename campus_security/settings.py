@@ -85,6 +85,8 @@ INSTALLED_APPS = [
     'security',
     'chat',
     'ai_engine',
+    # Admin UI app
+    'adminEnd',
 ]
 
 MIDDLEWARE = [
@@ -118,6 +120,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'adminEnd.context_processors.adminend_view_only',
             ],
         },
     },
@@ -227,3 +230,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+# AdminEnd view-only flag (configurable via environment or .env)
+ADMINEND_VIEW_ONLY = config('ADMINEND_VIEW_ONLY', default='False')
+ADMINEND_VIEW_ONLY = str(ADMINEND_VIEW_ONLY).lower() in ('1', 'true', 'yes', 'on')

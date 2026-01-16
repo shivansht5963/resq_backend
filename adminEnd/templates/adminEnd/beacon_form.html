@@ -1,0 +1,241 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<h1>{% if creating %}New Beacon{% else %}Edit Beacon{% endif %}</h1>
+<form method="post">
+  {% csrf_token %}
+  <div class="row">
+    <div class="col-md-8">
+      {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% for error in field.errors %}<div class="text-danger">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+      {% if not adminend_view_only %}
+        <button class="btn btn-primary">Save</button>
+      {% else %}
+        <button class="btn btn-primary" disabled title="View-only">Save (disabled)</button>
+      {% endif %}
+    </div>
+    <div class="col-md-4">
+      {% if not creating %}
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Actions</h5>
+          {% if not adminend_view_only %}
+            <form method="post">
+              {% csrf_token %}
+              <button name="toggle_active" class="btn btn-outline-warning">Toggle Active</button>
+            </form>
+          {% else %}
+            <button class="btn btn-outline-secondary" disabled>Toggle Active (view-only)</button>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title">Beacon Proximities</h5>
+          {% if proximities %}
+            <ul class="list-group mb-2">
+              {% for p in proximities %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <div>
+                    <strong>{{ p.to_beacon.location_name }}</strong> — {{ p.to_beacon.building }} (Floor {{ p.to_beacon.floor }})
+                    <br><small class="text-muted">Priority: {{ p.priority }}</small>
+                  </div>
+                  <div class="d-flex gap-2">
+                    {% if not adminend_view_only %}
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="proximity_id" value="{{ p.id }}" />
+                        <div class="input-group input-group-sm">
+                          <input name="priority" value="{{ p.priority }}" class="form-control form-control-sm" style="width:80px;" />
+                          <button name="edit_proximity" value="1" class="btn btn-sm btn-outline-secondary">Save</button>
+                        </div>
+                      </form>
+
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="proximity_id" value="{{ p.id }}" />
+                        <button name="move_up" value="1" class="btn btn-sm btn-outline-secondary">▲</button>
+                      </form>
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="proximity_id" value="{{ p.id }}" />
+                        <button name="move_down" value="1" class="btn btn-sm btn-outline-secondary">▼</button>
+                      </form>
+
+                      <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="proximity_id" value="{{ p.id }}" />
+                        <button name="delete_proximity" value="1" class="btn btn-sm btn-outline-danger">Delete</button>
+                      </form>
+                    {% else %}
+                      <button class="btn btn-sm btn-outline-secondary" disabled>Reorder</button>
+                      <button class="btn btn-sm btn-outline-secondary" disabled>Reorder</button>
+                      <button class="btn btn-sm btn-outline-danger" disabled>Delete</button>
+                    {% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="text-muted">No proximity relations defined.</p>
+          {% endif %}
+
+          <h6 class="mt-3">Add proximity</h6>
+          <form method="post" class="row g-2" id="add-proximity-form">
+            {% csrf_token %}
+            <input type="hidden" name="add_proximity" value="1" />
+            <div class="col-7">
+              {{ proximity_form.to_beacon }}
+              {% for error in proximity_form.to_beacon.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-3">
+              {{ proximity_form.priority }}
+              {% for error in proximity_form.priority.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="col-2">
+              {% if not adminend_view_only %}
+                <button class="btn btn-primary">Add</button>
+              {% else %}
+                <button class="btn btn-primary" disabled title="View-only">Add</button>
+              {% endif %}
+            </div>
+            {% if proximity_form.non_field_errors %}
+              <div class="col-12 mt-2">
+                {% for err in proximity_form.non_field_errors %}
+                  <div class="text-danger">{{ err }}</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </form>
+
+          {% if not adminend_view_only %}
+            <script>
+              // Helper to read csrf token cookie
+              function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                  const cookies = document.cookie.split(';');
+                  for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                      cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                      break;
+                    }
+                  }
+                }
+                return cookieValue;
+              }
+
+              const csrftoken = getCookie('csrftoken');
+
+              // AJAX handler for move up/down and delete and priority change
+              document.addEventListener('click', function(e) {
+                // Move up
+                if (e.target && e.target.matches('button[name="move_up"]')) {
+                  e.preventDefault();
+                  const proxId = e.target.closest('form').querySelector('input[name="proximity_id"]').value;
+                  const url = '{% url "adminEnd:ajax_move_proximity" beacon.id 0 %}'.replace('/0/', '/' + proxId + '/');
+                  fetch(url, {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': csrftoken, 'Accept': 'application/json'},
+                    body: new URLSearchParams({'direction': 'up'})
+                  }).then(r => r.json()).then(updateProximityList).catch(err => alert('Error: ' + err));
+                }
+
+                if (e.target && e.target.matches('button[name="move_down"]')) {
+                  e.preventDefault();
+                  const proxId = e.target.closest('form').querySelector('input[name="proximity_id"]').value;
+                  const url = '{% url "adminEnd:ajax_move_proximity" beacon.id 0 %}'.replace('/0/', '/' + proxId + '/');
+                  fetch(url, {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': csrftoken, 'Accept': 'application/json'},
+                    body: new URLSearchParams({'direction': 'down'})
+                  }).then(r => r.json()).then(updateProximityList).catch(err => alert('Error: ' + err));
+                }
+
+                if (e.target && e.target.matches('button[name="delete_proximity"]')) {
+                  e.preventDefault();
+                  if (!confirm('Delete this proximity?')) return;
+                  const proxId = e.target.closest('form').querySelector('input[name="proximity_id"]').value;
+                  const url = '{% url "adminEnd:ajax_delete_proximity" beacon.id 0 %}'.replace('/0/', '/' + proxId + '/');
+                  fetch(url, {method: 'POST', headers: {'X-CSRFToken': csrftoken, 'Accept': 'application/json'}})
+                    .then(r => r.json()).then(updateProximityList).catch(err => alert('Error: ' + err));
+                }
+              });
+
+              // Intercept priority edit form (Save)
+              document.querySelectorAll('form').forEach(f => {
+                f.addEventListener('submit', function(ev) {
+                  if (f.querySelector('button[name="edit_proximity"]')) {
+                    ev.preventDefault();
+                    const proxId = f.querySelector('input[name="proximity_id"]').value;
+                    const prio = f.querySelector('input[name="priority"]').value;
+                    const url = '{% url "adminEnd:ajax_update_proximity_priority" beacon.id 0 %}'.replace('/0/', '/' + proxId + '/');
+                    fetch(url, {
+                      method: 'POST',
+                      headers: {'X-CSRFToken': csrftoken, 'Accept': 'application/json'},
+                      body: new URLSearchParams({'priority': prio})
+                    }).then(r => r.json()).then(updateProximityList).catch(err => alert('Error: ' + err));
+                  }
+                });
+              });
+
+              // Update proximity list DOM from returned JSON
+              function updateProximityList(json) {
+                if (json.error) {
+                  alert('Error: ' + json.error);
+                  return;
+                }
+                const list = document.querySelector('.list-group');
+                if (!list) return;
+                list.innerHTML = '';
+                json.proximities.forEach(p => {
+                  const item = document.createElement('li');
+                  item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                  item.innerHTML = `<div><strong>Beacon ${p.to_beacon_id}</strong> <br><small class="text-muted">Priority: ${p.priority}</small></div>`;
+                  // Rebuild controls (simple: reload page on click fallback) - insert minimal controls
+                  const controls = document.createElement('div');
+                  controls.className = 'd-flex gap-2';
+                  controls.innerHTML = `
+                    <form method="post" class="d-inline"><input type="hidden" name="proximity_id" value="${p.id}" /><button name="move_up" class="btn btn-sm btn-outline-secondary">▲</button></form>
+                    <form method="post" class="d-inline"><input type="hidden" name="proximity_id" value="${p.id}" /><button name="move_down" class="btn btn-sm btn-outline-secondary">▼</button></form>
+                    <form method="post" class="d-inline"><input type="hidden" name="proximity_id" value="${p.id}" /><button name="delete_proximity" class="btn btn-sm btn-outline-danger">Delete</button></form>
+                  `;
+                  item.appendChild(controls);
+                  list.appendChild(item);
+                });
+              }
+
+              // Intercept add-proximity form to use AJAX as well
+              document.getElementById('add-proximity-form').addEventListener('submit', function(ev){
+                ev.preventDefault();
+                const form = ev.target;
+                const toBeacon = form.querySelector('select[name="to_beacon"]').value;
+                const priority = form.querySelector('input[name="priority"]').value;
+                const url = '{% url "adminEnd:beacon_detail" beacon.id %}';
+                // Use the existing non-AJAX endpoint for add (server does shifting). We'll POST via fetch and then update list using the JSON returned by the same server endpoint? Simpler: call add endpoint via AJAX by posting to same detail URL and expect HTML or JSON; our server responds with redirect or rendered page; to keep it simple, submit normally when JS is disabled, but here we'll use fetch and then reload page on success.
+                fetch(url, {
+                  method: 'POST',
+                  headers: {'X-CSRFToken': csrftoken},
+                  body: new URLSearchParams({'add_proximity': '1', 'to_beacon': toBeacon, 'priority': priority})
+                }).then(r => {
+                  if (r.redirected) location.href = r.url;
+                  else return r.text();
+                }).catch(err => alert('Error: ' + err));
+              });
+            </script>
+          {% endif %}
+        </div>
+      </div>
+
+      {% endif %}
+    </div>
+  </div>
+</form>
+{% endblock %}

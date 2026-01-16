@@ -1,0 +1,59 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<h1>Guards</h1>
+<table class="table table-hover table-striped align-middle">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Active</th>
+      <th>Available</th>
+      <th>Current Beacon</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for g in guards %}
+    <tr>
+      <td>{{ g.full_name }}</td>
+      <td>{{ g.email }}</td>
+      <td>
+        {% if g.is_active %}
+          <span class="badge bg-success badge-status"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
+        {% else %}
+          <span class="badge bg-secondary badge-status"><i class="bi bi-x-circle-fill me-1"></i>Inactive</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if g.guard_profile %}
+          {% if g.guard_profile.is_available %}
+            <span class="badge bg-success badge-status">Available</span>
+          {% else %}
+            <span class="badge bg-warning text-dark badge-status">Unavailable</span>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">N/A</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if g.guard_profile and g.guard_profile.current_beacon %}
+          <span class="badge bg-info text-dark">{{ g.guard_profile.current_beacon.location_name }}</span>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        {% if not adminend_view_only %}
+          <form method="post" action="{% url 'adminEnd:toggle_guard_availability' g.id %}">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat me-1"></i>Toggle</button>
+          </form>
+        {% else %}
+          <button class="btn btn-sm btn-outline-secondary" disabled title="View-only"><i class="bi bi-eye-fill me-1"></i>View-only</button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<h1>Beacons</h1>
+<form method="get" class="mb-3">
+  <div class="input-group">
+    <input name="q" value="{{ q }}" class="form-control" placeholder="Search by location or beacon id" />
+    <button class="btn btn-outline-primary">Search</button>
+    {% if not adminend_view_only %}
+      <a class="btn btn-primary ms-2" href="{% url 'adminEnd:beacon_create' %}">New Beacon</a>
+    {% else %}
+      <button class="btn btn-primary ms-2" disabled title="View-only">New Beacon</button>
+    {% endif %}
+  </div>
+</form>
+
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Beacon ID</th>
+      <th>Location</th>
+      <th>Building</th>
+      <th>Floor</th>
+      <th>Active</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for b in page_obj.object_list %}
+    <tr>
+      <td>{{ b.beacon_id }}</td>
+      <td>{{ b.location_name }}</td>
+      <td>{{ b.building }}</td>
+      <td>{{ b.floor }}</td>
+      <td>
+        {% if b.is_active %}
+          <span class="badge bg-success">Active</span>
+        {% else %}
+          <span class="badge bg-secondary">Inactive</span>
+        {% endif %}
+      </td>
+      <td><a class="btn btn-sm btn-outline-primary" href="{% url 'adminEnd:beacon_detail' b.id %}"><i class="bi bi-pencil-square me-1"></i>Edit</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<nav aria-label="Page navigation">
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}">Previous</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}">Next</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endblock %}

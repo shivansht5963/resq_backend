@@ -1,0 +1,222 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<div class="mb-5">
+  <h1 class="mb-1">Dashboard</h1>
+  <p class="text-muted">System overview and incident analytics</p>
+</div>
+
+<div class="row mb-4 g-3">
+  <div class="col-md-3">
+    <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(124, 58, 237, 0.05));">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <div>
+            <p class="text-muted small fw-600 mb-2">Open Incidents</p>
+            <h3 class="mb-0" style="color: #7c3aed; font-size: 2.5rem; font-weight: 800;">{{ incidents_open }}</h3>
+          </div>
+          <div class="ms-auto">
+            <i class="bi bi-exclamation-circle text-warning" style="font-size: 2rem; opacity: 0.5;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(196, 181, 253, 0.2), rgba(196, 181, 253, 0.1));">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <div>
+            <p class="text-muted small fw-600 mb-2">Total Incidents</p>
+            <h3 class="mb-0" style="color: #7c3aed; font-size: 2.5rem; font-weight: 800;">{{ incidents_total }}</h3>
+          </div>
+          <div class="ms-auto">
+            <i class="bi bi-list-check" style="font-size: 2rem; opacity: 0.5; color: #7c3aed;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.05));">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <div>
+            <p class="text-muted small fw-600 mb-2">Active Alerts</p>
+            <h3 class="mb-0" style="color: #f59e0b; font-size: 2.5rem; font-weight: 800;">{{ active_alerts }}</h3>
+          </div>
+          <div class="ms-auto">
+            <i class="bi bi-bell text-warning" style="font-size: 2rem; opacity: 0.5;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));">
+      <div class="card-body">
+        <div class="d-flex align-items-start">
+          <div>
+            <p class="text-muted small fw-600 mb-2">Guards On Duty</p>
+            <h3 class="mb-0" style="color: #10b981; font-size: 2.5rem; font-weight: 800;">{{ guards_on_duty }}</h3>
+          </div>
+          <div class="ms-auto">
+            <i class="bi bi-people text-success" style="font-size: 2rem; opacity: 0.5;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-4 g-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title fw-700 mb-3">Incidents (last 7 days)</h5>
+        <div style="position: relative; height: 280px;">
+          <canvas id="incidentsLineChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h5 class="card-title fw-700 mb-3">Incidents by Status</h5>
+        <div style="position: relative; height: 280px;">
+          <canvas id="statusPieChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light border-0 p-3">
+        <h5 class="mb-0 fw-700">Recent Incidents</h5>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead style="background-color: #f9fafb;">
+            <tr>
+              <th class="fw-600 text-muted small text-uppercase">ID</th>
+              <th class="fw-600 text-muted small text-uppercase">Location</th>
+              <th class="fw-600 text-muted small text-uppercase">Status</th>
+              <th class="fw-600 text-muted small text-uppercase">Priority</th>
+              <th class="fw-600 text-muted small text-uppercase">Created</th>
+              <th class="fw-600 text-muted small text-uppercase">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for incident in recent_incidents %}
+            <tr>
+              <td><code class="text-primary" style="font-size: 0.85rem;">{{ incident.id|truncatechars:12 }}</code></td>
+              <td>{{ incident.beacon.location_name }}</td>
+              <td>
+                {% if incident.status == 'CREATED' %}
+                  <span class="badge bg-info">Created</span>
+                {% elif incident.status == 'ASSIGNED' %}
+                  <span class="badge bg-warning text-dark">Assigned</span>
+                {% elif incident.status == 'IN_PROGRESS' %}
+                  <span class="badge" style="background-color: #f59e0b; color: white;">In Progress</span>
+                {% elif incident.status == 'RESOLVED' %}
+                  <span class="badge bg-success">Resolved</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if incident.priority == 'HIGH' %}
+                  <span class="badge bg-danger">High</span>
+                {% elif incident.priority == 'MEDIUM' %}
+                  <span class="badge bg-warning text-dark">Medium</span>
+                {% elif incident.priority == 'LOW' %}
+                  <span class="badge bg-success">Low</span>
+                {% endif %}
+              </td>
+              <td><small class="text-muted">{{ incident.created_at|date:"M d, H:i" }}</small></td>
+              <td><a href="{% url 'adminEnd:incident_detail' incident.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-right me-1"></i>View</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">No incidents found</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const labels = JSON.parse('{{ chart_labels|escapejs }}');
+  const data = JSON.parse('{{ chart_data|escapejs }}');
+  const statusCounts = JSON.parse('{{ status_counts_json|escapejs }}');
+
+  // Line chart for last 7 days
+  const ctx = document.getElementById('incidentsLineChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Incidents',
+        data: data,
+        borderColor: '#7c3aed',
+        backgroundColor: 'rgba(124, 58, 237, 0.1)',
+        tension: 0.4,
+        fill: true,
+        pointRadius: 5,
+        pointBackgroundColor: '#7c3aed',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true },
+        x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(124, 58, 237, 0.05)' } },
+        y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(124, 58, 237, 0.05)' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // Pie chart for status counts
+  const pieCtx = document.getElementById('statusPieChart').getContext('2d');
+  const statusLabels = Object.keys(statusCounts);
+  const statusData = Object.values(statusCounts);
+  new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: statusLabels,
+      datasets: [{
+        data: statusData,
+        backgroundColor: ['#7c3aed', '#f59e0b', '#ec4899', '#10b981'],
+        borderColor: '#fff',
+        borderWidth: 3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { padding: 10, font: { size: 12, weight: 500 } }
+        }
+      }
+    }
+  });
+</script>
+{% endblock %}

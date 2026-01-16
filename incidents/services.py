@@ -253,8 +253,37 @@ def get_or_create_incident_with_signals(
             )
             
             if new_priority > existing_incident.priority:
+                old_priority = existing_incident.priority
                 existing_incident.priority = new_priority
                 existing_incident.save(update_fields=['priority'])
+                
+                # Send INCIDENT_ESCALATED notification to assigned guard (if any)
+                try:
+                    assignment = existing_incident.guard_assignments.filter(is_active=True).first()
+                    if assignment:
+                        guard_user = assignment.guard
+                        from accounts.push_notifications import PushNotificationService
+                        tokens = PushNotificationService.get_guard_tokens(guard_user)
+                        if tokens:
+                            priority_display = dict(existing_incident.Priority.choices).get(new_priority, 'UNKNOWN')
+                            PushNotificationService.notify_incident_escalated(
+                                expo_tokens=tokens,
+                                incident_id=str(existing_incident.id),
+                                new_priority=priority_display
+                            )
+                            logger.info(
+                                f"[INCIDENT_ESCALATED] Notification sent to guard {guard_user.full_name}",
+                                extra={
+                                    'incident_id': str(existing_incident.id),
+                                    'old_priority': old_priority,
+                                    'new_priority': new_priority
+                                }
+                            )
+                except Exception as e:
+                    logger.error(
+                        f"[INCIDENT_ESCALATED] Failed to send notification: {str(e)}",
+                        extra={'incident_id': str(existing_incident.id)}
+                    )
             
             # Update last signal time
             existing_incident.last_signal_time = timezone.now()

@@ -285,11 +285,12 @@ def handle_guard_alert_accepted_via_proximity(alert):
     
     Called when ASSIGNMENT-type alert is accepted.
     Creates formal GuardAssignment link.
-    
+
     Args:
         alert: GuardAlert instance
     """
     from incidents.models import Incident
+    from accounts.push_notifications import PushNotificationService
     
     with transaction.atomic():
         # 1. Only allow ACCEPTED for ASSIGNMENT alerts
@@ -337,6 +338,25 @@ def handle_guard_alert_accepted_via_proximity(alert):
             alert_type='ASSIGNMENT',
             status__in=[GuardAlert.AlertStatus.SENT]
         ).exclude(id=alert.id).update(status=GuardAlert.AlertStatus.EXPIRED)
+        
+        # 7. Send ASSIGNMENT_CONFIRMED notification to guard
+        try:
+            guard_user = alert.guard
+            tokens = PushNotificationService.get_guard_tokens(guard_user)
+            if tokens:
+                PushNotificationService.notify_assignment_confirmed(
+                    expo_tokens=tokens,
+                    incident_id=str(incident.id)
+                )
+                logger.info(
+                    f"[ASSIGNMENT_CONFIRMED] Notification sent to guard {guard_user.full_name}",
+                    extra={'incident_id': str(incident.id), 'guard_id': str(guard_user.id)}
+                )
+        except Exception as e:
+            logger.error(
+                f"[ASSIGNMENT_CONFIRMED] Failed to send notification: {str(e)}",
+                extra={'incident_id': str(incident.id), 'guard_id': str(alert.guard.id)}
+            )
         
         logger.info(
             f"[ACCEPT] Guard {alert.guard.full_name} accepted incident {incident.id}",

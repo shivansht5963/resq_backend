@@ -1,0 +1,55 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<h1>Incidents</h1>
+<form method="get" class="row g-3 mb-3">
+  <div class="col-auto"><input name="q" value="{{ q }}" placeholder="Search by location or ID" class="form-control" /></div>
+  <div class="col-auto">
+    <select name="status" class="form-select">
+      <option value="">All statuses</option>
+      <option value="CREATED" {% if status_filter == 'CREATED' %}selected{% endif %}>Created</option>
+      <option value="ASSIGNED" {% if status_filter == 'ASSIGNED' %}selected{% endif %}>Assigned</option>
+      <option value="IN_PROGRESS" {% if status_filter == 'IN_PROGRESS' %}selected{% endif %}>In Progress</option>
+      <option value="RESOLVED" {% if status_filter == 'RESOLVED' %}selected{% endif %}>Resolved</option>
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-primary">Filter</button></div>
+</form>
+
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Location</th>
+      <th>Status</th>
+      <th>Priority</th>
+      <th>Created</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for incident in page_obj.object_list %}
+    <tr>
+      <td>{{ incident.id }}</td>
+      <td>{{ incident.beacon.location_name }}</td>
+      <td>{{ incident.get_status_display }}</td>
+      <td>{{ incident.get_priority_display }}</td>
+      <td>{{ incident.created_at }}</td>
+      <td><a class="btn btn-sm btn-outline-primary" href="{% url 'adminEnd:incident_detail' incident.id %}">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<nav aria-label="Page navigation">
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status_filter }}">Previous</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status_filter }}">Next</a></li>
+    {% endif %}
+  </ul>
+</nav>
+
+{% endblock %}

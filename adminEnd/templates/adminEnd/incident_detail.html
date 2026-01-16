@@ -1,0 +1,114 @@
+{% extends 'adminEnd/base.html' %}
+{% block content %}
+<h1>Incident {{ incident.id }}</h1>
+<div class="row">
+  <div class="col-md-8">
+    <dl class="row">
+      <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ incident.get_status_display }}</dd>
+      <dt class="col-sm-3">Priority</dt><dd class="col-sm-9">{{ incident.get_priority_display }}</dd>
+      <dt class="col-sm-3">Beacon</dt><dd class="col-sm-9">{{ incident.beacon.location_name }} ({{ incident.beacon.building }})</dd>
+      <dt class="col-sm-3">Description</dt><dd class="col-sm-9">{{ incident.description }}</dd>
+      <dt class="col-sm-3">Created At</dt><dd class="col-sm-9">{{ incident.created_at }}</dd>
+      <dt class="col-sm-3">Resolved At</dt><dd class="col-sm-9">{{ incident.resolved_at }}</dd>
+    </dl>
+
+    <h4>Signals</h4>
+    <ul>
+      {% for s in signals %}
+      <li>{{ s.get_signal_type_display }} — {{ s.created_at }} {% if s.source_user %}by {{ s.source_user.full_name }}{% endif %}</li>
+      {% empty %}<li>No signals</li>{% endfor %}
+    </ul>
+
+    <h4>Event Timeline</h4>
+    <ul>
+      {% for e in events %}
+      <li>{{ e.get_event_type_display }} — {{ e.created_at }} — {{ e.actor }}</li>
+      {% empty %}<li>No events</li>{% endfor %}
+    </ul>
+  </div>
+  <div class="col-md-4">
+    <h4>Images</h4>
+    {% if gcs_credentials_missing %}
+      <div class="alert alert-warning">Could not load images from cloud storage because credentials are not configured. Images will show placeholders.</div>
+    {% endif %}
+    <div class="d-grid gap-2">
+      {% if images_info %}
+        {% for img in images_info %}
+          <div class="card mb-2">
+            {% if img.url %}
+              <img src="{{ img.url }}" class="card-img-top" alt="img"/>
+            {% else %}
+              <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height:180px;">
+                <div class="text-muted">Image unavailable</div>
+              </div>
+            {% endif %}
+            <div class="card-body">
+              <p class="card-text">{{ img.description }}</p>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p>No images</p>
+      {% endif %}
+    </div>
+
+    <h4 class="mt-4">Current Assignment</h4>
+    {% if incident.current_assigned_guard %}
+      <p>Assigned to <strong>{{ incident.current_assigned_guard.full_name }}</strong> ({{ incident.current_assigned_guard.email }})</p>
+      {% if not adminend_view_only %}
+        <form method="post" class="mb-3">
+          {% csrf_token %}
+          <button name="unassign" value="1" class="btn btn-danger btn-sm">Unassign</button>
+        </form>
+      {% else %}
+        <button class="btn btn-sm btn-outline-secondary" disabled>Unassign (view-only)</button>
+      {% endif %}
+    {% else %}
+      <p>No active assignment</p>
+    {% endif %}
+
+    <h4 class="mt-2">Assign Guard</h4>
+    {% if not adminend_view_only %}
+      <form method="post" class="mb-3">
+        {% csrf_token %}
+        <div class="input-group">
+          <select name="guard_id" class="form-select">
+            <option value="">Select guard...</option>
+            {% for g in available_guards %}
+              <option value="{{ g.id }}">{{ g.full_name }} ({{ g.email }})</option>
+            {% endfor %}
+          </select>
+          <button name="assign" value="1" class="btn btn-primary">Assign</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="text-muted mb-3">Assigning guards is disabled in view-only mode.</div>
+    {% endif %}
+
+    <h4 class="mt-4">Admin Actions</h4>
+    {% if incident.status != 'RESOLVED' %}
+      {% if not adminend_view_only %}
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Resolution Notes</label>
+            <textarea name="resolution_notes" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Resolution Type</label>
+            <select name="resolution_type" class="form-select">
+              <option value="RESOLVED_BY_GUARD">Resolved by Guard</option>
+              <option value="ESCALATED_TO_ADMIN">Escalated to Admin</option>
+            </select>
+          </div>
+          <button name="resolve" value="1" class="btn btn-success">Mark Resolved</button>
+        </form>
+      {% else %}
+        <div class="alert alert-secondary">Resolving incidents is disabled in view-only mode.</div>
+      {% endif %}
+    {% else %}
+      <div class="alert alert-success">This incident is resolved.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
