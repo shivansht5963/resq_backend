@@ -9,7 +9,7 @@
 
 @studentId = 1
 @guardId = 3
-@incidentId = a976be8c-5cbb-49ad-a96a-ce6aca7f73dc
+@incidentId = bbf4ada3-c451-47ee-a4a4-d69ef5155917
 @alertId = 17
 @conversationId = 1
 @beaconId = beacon-uuid-here
@@ -604,7 +604,7 @@ Content-Type: image/jpeg
 ------WebKitFormBoundary--
 
 ### 2.2 Get Incident Details (with status, guard assignment, messages)
-GET {{baseUrl}}/incidents/{{incidentId}}/
+GET {{baseUrl}}/incidents/5cc4f4e6-b22a-48f1-94fc-b97ef0db4c7e/
 Authorization: Token {{studentToken}}
 
 ### 2.3 List All Student's Incidents

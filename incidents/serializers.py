@@ -300,7 +300,8 @@ class IncidentStatusUpdateSerializer(serializers.ModelSerializer):
                 'guard': {
                     'id': str(assignment.guard.id),
                     'full_name': assignment.guard.full_name,
-                    'email': assignment.guard.email
+                    'email': assignment.guard.email,
+                    'phone': assignment.guard.phone_number
                 },
                 'assigned_at': assignment.assigned_at,
                 'status': 'ACTIVE'
@@ -327,7 +328,8 @@ class IncidentStatusUpdateSerializer(serializers.ModelSerializer):
                 'id': alert.id,
                 'guard': {
                     'id': str(alert.guard.id),
-                    'full_name': alert.guard.full_name
+                    'full_name': alert.guard.full_name,
+                    'phone': alert.guard.phone_number
                 },
                 'priority_rank': alert.priority_rank,
                 'alert_type': alert.alert_type,
@@ -427,7 +429,8 @@ class IncidentTimelineSerializer(serializers.ModelSerializer):
                 'guard': {
                     'id': str(assignment.guard.id),
                     'full_name': assignment.guard.full_name,
-                    'email': assignment.guard.email
+                    'email': assignment.guard.email,
+                    'phone': assignment.guard.phone_number
                 },
                 'assigned_at': assignment.assigned_at
             }

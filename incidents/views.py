@@ -631,11 +631,18 @@ def panic_button_endpoint(request):
         )
     
     try:
-        esp_device = PhysicalDevice.objects.get(device_id=device_id, is_active=True)
+        esp_device = PhysicalDevice.objects.select_related('beacon').get(device_id=device_id, is_active=True)
     except PhysicalDevice.DoesNotExist:
         return Response(
             {'error': f'Device {device_id} not found or inactive'},
             status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Validate beacon exists and is active
+    if not esp_device.beacon:
+        return Response(
+            {'error': 'Device has no associated beacon'},
+            status=status.HTTP_400_BAD_REQUEST
         )
     
     if not esp_device.beacon.is_active:
@@ -644,18 +651,30 @@ def panic_button_endpoint(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
+    # If beacon_id is not set, use a virtual beacon_id based on device
+    beacon_id = esp_device.beacon.beacon_id
+    if not beacon_id:
+        # Create a virtual beacon ID using device location
+        beacon_id = f"device:{esp_device.device_id}:{esp_device.beacon.id}"
+    
     try:
         incident, created, signal = get_or_create_incident_with_signals(
-            beacon_id=esp_device.beacon.id,
+            beacon_id=beacon_id,
             signal_type=IncidentSignal.SignalType.PANIC_BUTTON,
             source_device_id=esp_device.id,
             details={
                 'device_id': device_id,
-                'device_type': esp_device.get_device_type_display()
+                'device_type': esp_device.get_device_type_display(),
+                'device_location': esp_device.beacon.location_name
             }
         )
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        logger = __import__('logging').getLogger(__name__)
+        logger.error(f"Panic button error: {str(e)}\n{traceback.format_exc()}")
+        return Response({'error': f'Internal error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     # Count alerts sent only if incident was newly created
     alerts_sent = 0

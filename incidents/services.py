@@ -354,19 +354,19 @@ def escalate_priority(current, new_signal_type):
     Escalate priority based on signal type.
     
     Rules:
-    - PANIC_BUTTON → always CRITICAL
-    - VIOLENCE_DETECTED → CRITICAL
-    - SCREAM_DETECTED → HIGH
-    - STUDENT_SOS → MEDIUM
-    - STUDENT_REPORT → MEDIUM
+    - PANIC_BUTTON → always CRITICAL (4)
+    - STUDENT_SOS → CRITICAL (4)
+    - VIOLENCE_DETECTED → HIGH (3)
+    - SCREAM_DETECTED → HIGH (3)
+    - STUDENT_REPORT → LOW (1)
     """
     
     priority_map = {
         IncidentSignal.SignalType.PANIC_BUTTON: Incident.Priority.CRITICAL,
-        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.HIGH,
         IncidentSignal.SignalType.SCREAM_DETECTED: Incident.Priority.HIGH,
-        IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.MEDIUM,
-        IncidentSignal.SignalType.STUDENT_REPORT: Incident.Priority.MEDIUM
+        IncidentSignal.SignalType.STUDENT_REPORT: Incident.Priority.LOW
     }
     
     new_priority = priority_map.get(new_signal_type, Incident.Priority.MEDIUM)
@@ -378,10 +378,10 @@ def get_initial_priority(signal_type):
     
     priority_map = {
         IncidentSignal.SignalType.PANIC_BUTTON: Incident.Priority.CRITICAL,
-        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.CRITICAL,
+        IncidentSignal.SignalType.VIOLENCE_DETECTED: Incident.Priority.HIGH,
         IncidentSignal.SignalType.SCREAM_DETECTED: Incident.Priority.HIGH,
-        IncidentSignal.SignalType.STUDENT_SOS: Incident.Priority.MEDIUM,
-        IncidentSignal.SignalType.STUDENT_REPORT: Incident.Priority.MEDIUM
+        IncidentSignal.SignalType.STUDENT_REPORT: Incident.Priority.LOW
     }
     
     return priority_map.get(signal_type, Incident.Priority.MEDIUM)
