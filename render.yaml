@@ -5,7 +5,7 @@ services:
     buildCommand: pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput
     startCommand: gunicorn campus_security.wsgi:application --bind 0.0.0.0:$PORT
     plan: free
-    healthCheckPath: /api/accounts/
+    healthCheckPath: /health/
     envVars:
       - key: DEBUG
         value: "True"
