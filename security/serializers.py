@@ -89,7 +89,9 @@ class GuardAlertDetailSerializer(serializers.ModelSerializer):
     
     def get_incident(self, obj):
         from incidents.serializers import IncidentDetailedSerializer
-        return IncidentDetailedSerializer(obj.incident).data
+        # Must pass context so IncidentDetailedSerializer → IncidentImageSerializer
+        # can call request.build_absolute_uri() and return full image URLs
+        return IncidentDetailedSerializer(obj.incident, context=self.context).data
     
     def get_guard(self, obj):
         return {

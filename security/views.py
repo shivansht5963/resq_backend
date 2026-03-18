@@ -338,7 +338,7 @@ class GuardAlertViewSet(viewsets.ModelViewSet):
         handle_guard_alert_accepted(alert)
         
         from security.serializers import GuardAlertDetailSerializer
-        return Response(GuardAlertDetailSerializer(alert).data)
+        return Response(GuardAlertDetailSerializer(alert, context={'request': request}).data)
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def acknowledge(self, request, pk=None):
@@ -358,4 +358,4 @@ class GuardAlertViewSet(viewsets.ModelViewSet):
         handle_guard_alert_declined(alert)
         
         from security.serializers import GuardAlertDetailSerializer
-        return Response(GuardAlertDetailSerializer(alert).data)
+        return Response(GuardAlertDetailSerializer(alert, context={'request': request}).data)
