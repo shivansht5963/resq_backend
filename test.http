@@ -2,7 +2,7 @@
 ### Install: REST Client extension for VS Code
 ### Usage: Click "Send Request" above each request or Ctrl+Alt+R
 
-@baseUrl = http://127.0.0.1:8000/api
+@baseUrl = https://resq-server.onrender.com/api
 @studentToken = 0ae475f9cf39e1134b4003d17a2b1b9f47b1e386
 @guardToken = de88e903f2731983695f8e698a4eaa3d83d05d4a
 @adminToken = your_admin_token_here

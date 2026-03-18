@@ -162,12 +162,15 @@ class IncidentViewSet(viewsets.ModelViewSet):
         location = (request.POST.get('location', '') or '').strip()
         
         # Get images from request.FILES
-        images_list = request.FILES.getlist('images', [])
+        # Try both 'images' (array) and 'image' (single) to support all frontend formats
+        images_list = request.FILES.getlist('images', []) or request.FILES.getlist('image', [])
         
-        # Log request info
+        # Log request info — dump ALL keys so we can debug frontend format
         print(f"\n{'='*60}")
         print(f"[INCIDENT REPORT] New report from {request.user.email}")
-        print(f"{'='*60}")
+        print(f"  Content-Type: {request.content_type}")
+        print(f"  POST keys: {list(request.POST.keys())}")
+        print(f"  FILES keys: {list(request.FILES.keys())}")
         print(f"  Type: {report_type}")
         print(f"  Description: {description[:50]}...")
         print(f"  Beacon ID: {beacon_id}")
