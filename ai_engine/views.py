@@ -225,7 +225,7 @@ def _process_ai_detection_with_images(request, event_type, signal_type, confiden
         try:
             image_urls.append({
                 'id': img.id,
-                'image': img.image.url,
+                'image': request.build_absolute_uri(img.image.url),
                 'uploaded_at': img.uploaded_at.isoformat(),
                 'description': img.description
             })

@@ -41,7 +41,9 @@ venv.bak/
 *.log
 db.sqlite3
 db.sqlite3-journal
-/media
+# Media uploads — ignore actual files but keep folder structure for Render
+media/*
+!media/.gitkeep
 /staticfiles
 
 # IDEs

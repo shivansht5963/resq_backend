@@ -16,33 +16,10 @@ import sys
 from decouple import config
 
 # Load .env file
-import os
-from pathlib import Path
+from dotenv import load_dotenv
 env_file = Path(__file__).resolve().parent.parent / '.env'
 if env_file.exists():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(env_file)
-    except ImportError:
-        pass
-
-# Also load .env.gcs for GCS-specific credentials
-env_gcs_file = Path(__file__).resolve().parent.parent / '.env.gcs'
-if env_gcs_file.exists():
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(env_gcs_file)
-    except ImportError:
-        pass
-
-# Ensure GOOGLE_APPLICATION_CREDENTIALS is set for GCS
-if not os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
-    creds_path = Path(__file__).resolve().parent.parent / 'credentials' / 'gen-lang-client-0117249847-eb5558a80732.json'
-    if creds_path.exists():
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(creds_path)
-        print(f"[GCS] Set GOOGLE_APPLICATION_CREDENTIALS to {creds_path}")
-    else:
-        print(f"[GCS] WARNING: Credentials file not found at {creds_path}")
+    load_dotenv(env_file)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,7 +55,6 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework.authtoken',
-    'storages',
     # Local apps
     'accounts',
     'incidents',
@@ -176,38 +152,25 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Google Cloud Storage Configuration for Image Storage
-GS_BUCKET_NAME = config('GS_BUCKET_NAME', default='resq-campus-security')
-GS_PROJECT_ID = config('GS_PROJECT_ID', default='gen-lang-client-0117249847')
-GS_CREDENTIALS = None  # Will use GOOGLE_APPLICATION_CREDENTIALS env var
-# Use PUBLIC URLs for image access (not signed URLs)
-GS_QUERYSTRING_AUTH = False
-
-# Django 5.2+ uses STORAGES dict instead of DEFAULT_FILE_STORAGE (for backwards compatibility)
+# ---------------------------------------------------------------------------
+# Media / File Storage — local disk (no cloud dependency)
+# Files are saved under MEDIA_ROOT organised by date: YYYY/MM/DD/filename
+# On Render free tier the /media disk is ephemeral unless you add a Disk mount.
+# For a hackathon / demo this is perfectly fine.
+# ---------------------------------------------------------------------------
 STORAGES = {
     'default': {
-        'BACKEND': 'campus_security.storage.PublicGoogleCloudStorage',
-        'OPTIONS': {
-            'bucket_name': GS_BUCKET_NAME,
-            'project_id': GS_PROJECT_ID,
-        },
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
+    # WhiteNoise for static files
     'staticfiles': {
-        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 
-# Legacy DEFAULT_FILE_STORAGE for backwards compatibility
-DEFAULT_FILE_STORAGE = 'campus_security.storage.PublicGoogleCloudStorage'
-MEDIA_URL = 'https://storage.googleapis.com/{}/'.format(GS_BUCKET_NAME)
-
-# Note: No MEDIA_ROOT needed - GCS doesn't use local disk
-
-print("[STORAGE] Using storages.backends.gcloud.GoogleCloudStorage")
-print("   Bucket: {}".format(GS_BUCKET_NAME))
-print("   Project: {}".format(GS_PROJECT_ID))
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
 
 # File upload settings
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB

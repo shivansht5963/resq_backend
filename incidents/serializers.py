@@ -17,15 +17,21 @@ class IncidentImageSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'uploaded_at')
     
     def get_image(self, obj):
-        """Return direct GCS HTTPS URL for image (no request context needed).
-        
-        GCS URLs are absolute and already include the full domain:
-        https://storage.googleapis.com/bucket-name/incidents/2026/01/13/image.jpg
+        """Return full absolute URL for the image so the frontend can access it directly.
+
+        With local FileSystemStorage, obj.image.url returns a relative path
+        like /media/incidents/2026/01/13/image.jpg.
+        We use request.build_absolute_uri() to convert it to:
+        https://resq-server.onrender.com/media/incidents/2026/01/13/image.jpg
         """
-        if obj.image:
-            # obj.image.url returns the direct GCS URL from storage backend
-            return obj.image.url
-        return None
+        if not obj.image:
+            return None
+        url = obj.image.url  # relative path: /media/<path>
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(url)
+        # Fallback if no request context (shouldn't happen in normal API calls)
+        return url
     
     def get_uploaded_by_email(self, obj):
         """Return email of user who uploaded image."""
@@ -131,7 +137,7 @@ class IncidentDetailedSerializer(serializers.ModelSerializer):
 
     beacon = BeaconSerializer(read_only=True)
     signals = IncidentSignalSerializer(many=True, read_only=True)
-    images = IncidentImageSerializer(many=True, read_only=True)
+    images = serializers.SerializerMethodField()
     guard_assignment = serializers.SerializerMethodField()
     conversation = ConversationSerializer(read_only=True)
     guard_alerts = serializers.SerializerMethodField()
@@ -146,6 +152,11 @@ class IncidentDetailedSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'first_signal_time', 'last_signal_time')
     
+    def get_images(self, obj):
+        """Return images with absolute URLs by passing request context through."""
+        images = obj.images.all()
+        return IncidentImageSerializer(images, many=True, context=self.context).data
+
     def get_guard_assignment(self, obj):
         try:
             assignment = obj.guard_assignments.get(is_active=True)

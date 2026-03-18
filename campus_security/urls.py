@@ -15,9 +15,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.static import serve
 from . import views
 
 urlpatterns = [
@@ -32,10 +33,13 @@ urlpatterns = [
     path('api/', include('ai_engine.urls')),
 ]
 
-# Serve media files (both in development and production)
-# In production on Render, WhiteNoise handles this via wsgi.py
-# In development, Django's static file handler handles it
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve local media files (used when GCS falls back to local disk)
+# Works in both DEBUG and production so fallback images are always accessible
+import re as _re
+_media_prefix = _re.escape(settings.MEDIA_URL.lstrip('/'))
+urlpatterns += [
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
 
 # Serve static files in development
 if settings.DEBUG:
