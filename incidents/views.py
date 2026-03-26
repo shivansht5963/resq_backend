@@ -228,59 +228,102 @@ class IncidentViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
         # Store images directly from request.FILES
+        # NOTE: React Native sends images as raw base64 strings inside multipart/form-data
+        # (using manual buildMultipartBody() with expo-file-system readAsStringAsync base64).
+        # Django receives these in request.FILES but the file bytes ARE the base64 text, not
+        # the decoded binary. We detect this and decode before saving so the stored file is
+        # a valid JPEG/PNG that can be viewed in the app and admin.
+        import base64
+        from io import BytesIO
+        from django.core.files.uploadedfile import InMemoryUploadedFile
+
         image_objects = []
         print(f"\n{'='*60}")
         print(f"[IMAGE UPLOAD] Processing {len(images_list)} images for incident {incident.id}")
         print(f"{'='*60}")
-        
+
         for idx, image_file in enumerate(images_list[:3]):
             try:
                 print(f"\n[Image {idx + 1}] Starting upload...")
                 print(f"  File name: {image_file.name}")
                 print(f"  Content type: {image_file.content_type}")
                 print(f"  File size: {image_file.size} bytes")
-                
-                # IMPORTANT: Reset file pointer to beginning before saving
-                # This ensures the entire file is available for GCS upload
+
+                # Read raw bytes from the uploaded part
                 image_file.seek(0)
-                print(f"  ✅ File pointer reset to position 0")
-                
-                # Read file into memory to ensure it's complete
-                file_data = image_file.read()
-                print(f"  ✅ Read {len(file_data)} bytes from file")
-                
-                # Reset pointer again after reading
-                image_file.seek(0)
-                print(f"  File pointer reset again to position 0")
-                
-                # Save to GCS via Django's storage system
-                print(f"  [→] Uploading to Google Cloud Storage...")
+                raw_bytes = image_file.read()
+                print(f"  ✅ Read {len(raw_bytes)} bytes from file")
+
+                # -------------------------------------------------------
+                # Base64 detection & decoding
+                # React Native's buildMultipartBody() puts a raw base64
+                # string as the part body. We sniff the first few bytes:
+                # if they look like printable ASCII (not a JPEG 0xFF 0xD8
+                # or PNG 0x89 PNG magic), treat as base64.
+                # -------------------------------------------------------
+                is_base64 = False
+                if len(raw_bytes) > 4:
+                    # JPEG magic: FF D8   PNG magic: 89 50 4E 47
+                    is_jpeg = raw_bytes[:2] == b'\xff\xd8'
+                    is_png  = raw_bytes[:4] == b'\x89PNG'
+                    is_base64 = not (is_jpeg or is_png)
+
+                if is_base64:
+                    print(f"  ℹ️  Detected base64-encoded image (React Native format). Decoding...")
+                    try:
+                        # Strip any surrounding whitespace / newlines that may have
+                        # been added by the manual multipart builder
+                        b64_str = raw_bytes.strip()
+                        decoded_bytes = base64.b64decode(b64_str)
+                        print(f"  ✅ Decoded {len(decoded_bytes)} bytes from base64")
+
+                        # Wrap in a Django-compatible file object
+                        file_name = image_file.name or f"photo_{idx+1}.jpg"
+                        content_type = image_file.content_type or 'image/jpeg'
+                        buf = BytesIO(decoded_bytes)
+                        image_file = InMemoryUploadedFile(
+                            file=buf,
+                            field_name='images',
+                            name=file_name,
+                            content_type=content_type,
+                            size=len(decoded_bytes),
+                            charset=None
+                        )
+                    except Exception as b64_err:
+                        print(f"  ⚠️  base64 decode failed ({b64_err}), using raw bytes as-is")
+                        # Fall back: reset the original file pointer and use as-is
+                        image_file.seek(0)
+                else:
+                    # Already binary — reset pointer and proceed normally
+                    image_file.seek(0)
+                    print(f"  ✅ Image is binary (no base64 decoding needed)")
+
+                # Save to storage via Django's storage system
+                print(f"  [→] Saving image to storage...")
                 print(f"      Storage backend: {IncidentImage._meta.get_field('image').storage.__class__.__name__}")
-                
-                # Use create_incident_image helper to handle upload properly
+
                 incident_image = IncidentImage.objects.create(
                     incident=incident,
                     image=image_file,
                     uploaded_by=request.user,
                     description=f"Image {idx + 1}"
                 )
-                
-                # Verify file was actually saved to GCS
+
+                # Verify file was actually saved
                 if incident_image.image:
                     try:
                         stored_url = incident_image.image.url
-                        print(f"  ✅ Image {idx + 1} uploaded successfully!")
+                        print(f"  ✅ Image {idx + 1} saved successfully!")
                         print(f"     ID: {incident_image.id}")
                         print(f"     File path: {incident_image.image.name}")
-                        print(f"     GCS URL: {stored_url}")
+                        print(f"     URL: {stored_url}")
                         image_objects.append(incident_image)
                     except Exception as url_error:
                         print(f"  ⚠️  Image saved but URL generation failed: {url_error}")
-                        print(f"     File path: {incident_image.image.name}")
                         image_objects.append(incident_image)
                 else:
                     print(f"  ❌ Image {idx + 1}: No image file after save")
-                
+
             except Exception as e:
                 print(f"\n  ❌ ERROR saving image {idx + 1}:")
                 print(f"     Error: {str(e)}")

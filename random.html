@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Paynion | Split costs, not friendships.</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#4d908a",
+              "secondary": "#366a65",
+              "background": "#f5f1e8",
+              "surface": "#ffffff",
+              "on-background": "#1a1c1c",
+              "on-surface-variant": "#444948",
+              "outline": "#849491",
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #f5f1e8;
+            background-image: radial-gradient(#4d908a33 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        .text-glow {
+            text-shadow: 0 0 20px rgba(77, 144, 138, 0.2);
+        }
+        .charcoal-text {
+            color: #1a1c1c;
+        }
+    </style>
+</head>
+<body class="font-body text-on-background selection:bg-primary/20">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-white/60 backdrop-blur-xl border-b border-black/5 shadow-sm">
+<div class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-black tracking-tighter text-primary">Paynion</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="font-manrope text-sm font-bold tracking-tight text-primary transition-colors duration-300" href="#">Product</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-on-surface-variant hover:text-primary transition-colors duration-300" href="#">Features</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-on-surface-variant hover:text-primary transition-colors duration-300" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2.5 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 active:scale-95 transition-transform">
+                Get Started
+            </button>
+</div>
+</div>
+</nav>
+<main class="pt-32 pb-20 px-6">
+<!-- Hero Section -->
+<section class="max-w-7xl mx-auto text-center mb-32">
+<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 mb-8 border border-primary/20">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[10px] font-black uppercase tracking-widest text-primary">New: AI Bill Intelligence</span>
+</div>
+<h1 class="text-5xl md:text-7xl font-extrabold tracking-tight charcoal-text mb-8 max-w-4xl mx-auto leading-[1.1]">
+            Split costs, <span class="text-primary text-glow">not friendships.</span>
+</h1>
+<p class="text-lg md:text-xl text-on-surface-variant max-w-2xl mx-auto mb-12 leading-relaxed">
+            The premium, data-focused way to manage shared expenses with AI-powered bill scanning and seamless settlements.
+        </p>
+<div class="flex flex-col md:flex-row gap-4 justify-center items-center mb-24">
+<button class="w-full md:w-auto px-8 py-4 bg-primary text-white rounded-xl font-extrabold text-lg shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                Get Started for Free
+            </button>
+<button class="w-full md:w-auto px-8 py-4 glass-card charcoal-text rounded-xl font-bold text-lg hover:bg-white/50 active:scale-95 transition-all">
+                How it Works
+            </button>
+</div>
+<!-- Feature Preview Glass Card -->
+<div class="relative max-w-5xl mx-auto">
+<div class="absolute -top-20 -left-20 w-64 h-64 bg-primary/20 rounded-full blur-[100px]"></div>
+<div class="absolute -bottom-20 -right-20 w-64 h-64 bg-primary/10 rounded-full blur-[100px]"></div>
+<div class="glass-card rounded-lg p-4 md:p-8 shadow-2xl relative z-10 overflow-hidden border-white/80">
+<div class="flex flex-col md:flex-row gap-6">
+<div class="flex-1 space-y-6">
+<div class="flex justify-between items-center">
+<div class="text-left">
+<div class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-1">Current Balance</div>
+<div class="text-3xl font-extrabold charcoal-text tracking-tight">₹2,440.50</div>
+</div>
+<div class="flex -space-x-3">
+<div class="w-10 h-10 rounded-full bg-white border-2 border-background flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-xs text-primary" data-icon="person">person</span>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary border-2 border-background flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-xs text-white" data-icon="person">person</span>
+</div>
+<div class="w-10 h-10 rounded-full bg-white border-2 border-background flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-xs text-primary" data-icon="add">add</span>
+</div>
+</div>
+</div>
+<div class="h-48 w-full bg-black/5 rounded-xl relative flex items-end p-4 gap-2">
+<div class="w-full h-[40%] bg-primary/20 rounded-t-md"></div>
+<div class="w-full h-[70%] bg-primary/40 rounded-t-md"></div>
+<div class="w-full h-[50%] bg-primary/30 rounded-t-md"></div>
+<div class="w-full h-[90%] bg-primary rounded-t-md"></div>
+<div class="w-full h-[60%] bg-primary/50 rounded-t-md"></div>
+</div>
+</div>
+<div class="w-full md:w-72 space-y-4">
+<div class="text-left text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Recent Activities</div>
+<div class="space-y-3">
+<div class="p-3 bg-white/80 rounded-xl flex items-center gap-3 border border-black/5 shadow-sm">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="restaurant">restaurant</span>
+</div>
+<div class="flex-1 text-left">
+<div class="text-xs font-bold charcoal-text">Dinner at Nobu</div>
+<div class="text-[10px] text-on-surface-variant">Shared with 4 people</div>
+</div>
+<div class="text-xs font-black charcoal-text">₹450</div>
+</div>
+<div class="p-3 bg-primary/5 rounded-xl flex items-center gap-3 border border-primary/10 shadow-sm">
+<div class="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="flight">flight</span>
+</div>
+<div class="flex-1 text-left">
+<div class="text-xs font-bold charcoal-text">Trip to Ibiza</div>
+<div class="text-[10px] text-on-surface-variant">Settled 2h ago</div>
+</div>
+<div class="text-xs font-black text-primary">DONE</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Integrations Section -->
+<section class="max-w-7xl mx-auto mb-40">
+<div class="text-center mb-16">
+<h2 class="text-3xl font-extrabold charcoal-text mb-4">Works with your world</h2>
+<p class="text-on-surface-variant">Seamlessly connect with your preferred payment and banking methods.</p>
+</div>
+<div class="flex flex-wrap justify-center gap-12 items-center opacity-60">
+<div class="flex flex-col items-center gap-3 group">
+<div class="w-16 h-16 glass-card rounded-2xl flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-white">
+<span class="material-symbols-outlined text-4xl" data-icon="account_balance">account_balance</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-widest charcoal-text">Bank Transfer</span>
+</div>
+<div class="flex flex-col items-center gap-3 group">
+<div class="w-16 h-16 glass-card rounded-2xl flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-white">
+<span class="material-symbols-outlined text-4xl" data-icon="payments">payments</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-widest charcoal-text">UPI / Instant Pay</span>
+</div>
+<div class="flex flex-col items-center gap-3 group">
+<div class="w-16 h-16 glass-card rounded-2xl flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-white">
+<span class="material-symbols-outlined text-4xl" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-widest charcoal-text">Receipt Scan</span>
+</div>
+<div class="flex flex-col items-center gap-3 group">
+<div class="w-16 h-16 glass-card rounded-2xl flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-white">
+<span class="material-symbols-outlined text-4xl" data-icon="credit_card">credit_card</span>
+</div>
+<span class="text-[10px] font-bold uppercase tracking-widest charcoal-text">Credit Cards</span>
+</div>
+</div>
+</section>
+<!-- Why Choose Paynion (USPs) -->
+<section class="max-w-7xl mx-auto mb-40">
+<div class="text-center mb-20">
+<h2 class="text-4xl font-extrabold charcoal-text mb-4">Why Choose Paynion?</h2>
+<p class="text-on-surface-variant max-w-xl mx-auto">Engineered for perfection, designed for people.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+<div class="glass-card p-8 rounded-lg border-primary/10 hover:border-primary/30 transition-all text-center">
+<div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-6 text-primary">
+<span class="material-symbols-outlined" data-icon="shield_lock">shield_lock</span>
+</div>
+<h4 class="font-bold charcoal-text mb-2">Unmatched Security</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Bank-grade encryption for every transaction and personal data point.</p>
+</div>
+<div class="glass-card p-8 rounded-lg border-primary/10 hover:border-primary/30 transition-all text-center">
+<div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-6 text-primary">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+</div>
+<h4 class="font-bold charcoal-text mb-2">Lightning Speed</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Scan, split, and settle in under 30 seconds. No more waiting around.</p>
+</div>
+<div class="glass-card p-8 rounded-lg border-primary/10 hover:border-primary/30 transition-all text-center">
+<div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-6 text-primary">
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<h4 class="font-bold charcoal-text mb-2">Smart AI</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">Intelligent itemization that understands complex restaurant bills and taxes.</p>
+</div>
+<div class="glass-card p-8 rounded-lg border-primary/10 hover:border-primary/30 transition-all text-center">
+<div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-6 text-primary">
+<span class="material-symbols-outlined" data-icon="touch_app">touch_app</span>
+</div>
+<h4 class="font-bold charcoal-text mb-2">Pure Simplicity</h4>
+<p class="text-xs text-on-surface-variant leading-relaxed">A clean, distraction-free interface focused on getting the job done.</p>
+</div>
+</div>
+</section>
+<!-- Original Value Proposition Section Restyled -->
+<section class="max-w-7xl mx-auto mb-40">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="glass-card p-10 rounded-lg border-white shadow-xl hover:shadow-primary/10 transition-all group">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="document_scanner">document_scanner</span>
+</div>
+<h3 class="text-2xl font-bold charcoal-text mb-4">AI Bill Scanning</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                    Our proprietary OCR technology identifies line items, tax, and tip automatically from any receipt with 99.9% accuracy.
+                </p>
+</div>
+<div class="glass-card p-10 rounded-lg border-white shadow-xl hover:shadow-primary/10 transition-all group">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<h3 class="text-2xl font-bold charcoal-text mb-4">Smart Settlements</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                    Say goodbye to awkward money talks. One-tap settlements via your favorite payment rails with instant notifications.
+                </p>
+</div>
+<div class="glass-card p-10 rounded-lg border-white shadow-xl hover:shadow-primary/10 transition-all group">
+<div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="analytics">analytics</span>
+</div>
+<h3 class="text-2xl font-bold charcoal-text mb-4">Group Analytics</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                    Visualize your group spending habits over time. Identify trends and optimize shared budgets with elegant reporting.
+                </p>
+</div>
+</div>
+</section>
+<!-- FAQ Section -->
+<section class="max-w-3xl mx-auto mb-40 px-6">
+<div class="text-center mb-16">
+<h2 class="text-4xl font-extrabold charcoal-text mb-4">Frequently Asked</h2>
+<p class="text-on-surface-variant">Everything you need to know about Paynion.</p>
+</div>
+<div class="space-y-4">
+<div class="glass-card p-6 rounded-xl border-white shadow-sm">
+<h4 class="font-bold charcoal-text mb-2">Is my bank data safe?</h4>
+<p class="text-sm text-on-surface-variant">Yes. We use AES-256 encryption and partner with world-class financial infrastructure providers to ensure your data never leaves secure hands.</p>
+</div>
+<div class="glass-card p-6 rounded-xl border-white shadow-sm">
+<h4 class="font-bold charcoal-text mb-2">Does Paynion take a fee?</h4>
+<p class="text-sm text-on-surface-variant">Paynion is free for personal use between friends. We offer a Premium plan for businesses and frequent travelers who need advanced reporting.</p>
+</div>
+<div class="glass-card p-6 rounded-xl border-white shadow-sm">
+<h4 class="font-bold charcoal-text mb-2">How accurate is the bill scanning?</h4>
+<p class="text-sm text-on-surface-variant">Our AI is trained on millions of receipts. It handles messy handwriting, low light, and complex tax calculations with 99.9% accuracy.</p>
+</div>
+</div>
+</section>
+<!-- The Paynion Process -->
+<section class="max-w-7xl mx-auto mb-40">
+<div class="text-center mb-20">
+<h2 class="text-4xl font-extrabold charcoal-text mb-4">The Paynion Process</h2>
+<p class="text-on-surface-variant max-w-xl mx-auto">From paper receipt to settled balance in seconds.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-0 relative">
+<div class="hidden md:block absolute top-1/2 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-y-12"></div>
+<div class="relative z-10 p-8 text-center">
+<div class="w-16 h-16 glass-card rounded-full flex items-center justify-center mx-auto mb-8 border-primary/20 shadow-xl shadow-primary/5 bg-white">
+<span class="text-xl font-black text-primary">01</span>
+</div>
+<h4 class="text-xl font-bold charcoal-text mb-2">Snap a Photo</h4>
+<p class="text-sm text-on-surface-variant">Take a quick picture of your receipt from any angle.</p>
+</div>
+<div class="relative z-10 p-8 text-center">
+<div class="w-16 h-16 glass-card rounded-full flex items-center justify-center mx-auto mb-8 border-primary/20 shadow-xl shadow-primary/5 bg-white">
+<span class="text-xl font-black text-primary">02</span>
+</div>
+<h4 class="text-xl font-bold charcoal-text mb-2">Auto-Split</h4>
+<p class="text-sm text-on-surface-variant">Assign items to people or split everything equally with AI.</p>
+</div>
+<div class="relative z-10 p-8 text-center">
+<div class="w-16 h-16 glass-card rounded-full flex items-center justify-center mx-auto mb-8 border-primary/20 shadow-xl shadow-primary/5 bg-white">
+<span class="text-xl font-black text-primary">03</span>
+</div>
+<h4 class="text-xl font-bold charcoal-text mb-2">Settle Up</h4>
+<p class="text-sm text-on-surface-variant">Click settle and watch the magic happen. No chasing required.</p>
+</div>
+</div>
+</section>
+<!-- Final CTA Section -->
+<section class="max-w-7xl mx-auto">
+<div class="glass-card p-12 md:p-24 rounded-lg text-center bg-gradient-to-br from-primary/5 via-white/80 to-white/40 border border-primary/20 shadow-2xl">
+<h2 class="text-4xl md:text-6xl font-extrabold charcoal-text mb-8 tracking-tight">Ready to start splitting?</h2>
+<p class="text-on-surface-variant mb-12 text-lg max-w-xl mx-auto">Join 500,000+ users managing their shared life without the headache.</p>
+<div class="flex flex-col md:flex-row gap-4 justify-center">
+<button class="px-12 py-5 bg-primary text-white rounded-xl font-black text-xl shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all">
+                    Join Now
+                </button>
+<button class="px-12 py-5 glass-card charcoal-text rounded-xl font-bold text-xl hover:bg-white/80 active:scale-95 transition-all">
+                    Contact Sales
+                </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-white/40 py-12 border-t border-black/5">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 max-w-7xl mx-auto gap-6">
+<div class="text-lg font-extrabold text-primary">Paynion</div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-manrope text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-all" href="#">Privacy Policy</a>
+<a class="font-manrope text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-all" href="#">Terms of Service</a>
+<a class="font-manrope text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-all" href="#">Security</a>
+<a class="font-manrope text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-all" href="#">Status</a>
+<a class="font-manrope text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary transition-all" href="#">Contact</a>
+</div>
+<div class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+            © 2024 Paynion Financial. All rights reserved.
+        </div>
+</div>
+</footer>
+</body></html>
