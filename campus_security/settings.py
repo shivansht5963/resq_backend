@@ -197,3 +197,61 @@ REST_FRAMEWORK = {
 # AdminEnd view-only flag (configurable via environment or .env)
 ADMINEND_VIEW_ONLY = config('ADMINEND_VIEW_ONLY', default='False')
 ADMINEND_VIEW_ONLY = str(ADMINEND_VIEW_ONLY).lower() in ('1', 'true', 'yes', 'on')
+
+# ---------------------------------------------------------------------------
+# Logging — output everything to stdout so Render captures it in the log tab.
+# ---------------------------------------------------------------------------
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        # App-level loggers — push notifications, incidents, AI engine, etc.
+        'accounts': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'incidents': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'security': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'ai_engine': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

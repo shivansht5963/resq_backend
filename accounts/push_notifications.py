@@ -279,10 +279,16 @@ class PushNotificationService:
         incident_id: str,
         alert_id: int,
         priority: str,
-        location: str
+        location: str,
+        guard_users: Optional[List] = None,
+        guard_alert=None,
+        incident=None,
     ) -> None:
         """
         Send GUARD_ALERT notification to one or more guards.
+
+        Uses send_with_logging so every attempt is recorded in PushNotificationLog
+        and is visible in the admin panel push notification log.
 
         Args:
             expo_tokens: List of Expo push tokens
@@ -290,40 +296,54 @@ class PushNotificationService:
             alert_id: Alert ID
             priority: Priority level (e.g., "CRITICAL", "HIGH")
             location: Location description
+            guard_users: Matching list of User instances (same order as expo_tokens)
+            guard_alert: Related GuardAlert instance (optional)
+            incident: Related Incident instance (optional)
         """
         if not expo_tokens:
             return
 
-        messages = []
-        for token in expo_tokens:
-            message = {
-                "to": token,
-                "sound": "default",
-                "title": "🚨 Incoming Alert",
-                "body": f"{priority} - {location}",
-                "data": {
-                    "type": "GUARD_ALERT",
-                    "incident_id": str(incident_id),
-                    "alert_id": str(alert_id),
-                    "priority": priority,
-                    "location": location,
-                },
-                "priority": "high",
-            }
-            messages.append(message)
+        title = "\U0001f6a8 Incoming Alert"
+        body = f"{priority} - {location}"
+        data = {
+            "type": "GUARD_ALERT",
+            "incident_id": str(incident_id),
+            "alert_id": str(alert_id),
+            "priority": priority,
+            "location": location,
+        }
 
-        if len(messages) == 1:
-            PushNotificationService.send_notification(
-                expo_tokens[0],
-                "🚨 Incoming Alert",
-                f"{priority} - {location}",
-                messages[0].get("data"),
-                priority="high",
-            )
-        else:
-            results = PushNotificationService.send_batch_notifications(messages)
-            sent_count = sum(1 for r in results if r)
-            logger.info(f"Guard alerts: {sent_count}/{len(messages)} sent successfully")
+        sent_count = 0
+        for idx, token in enumerate(expo_tokens):
+            # Try to get the matching user for DB logging
+            recipient = None
+            if guard_users and idx < len(guard_users):
+                recipient = guard_users[idx]
+
+            if recipient is not None:
+                success = PushNotificationService.send_with_logging(
+                    recipient=recipient,
+                    expo_token=token,
+                    notification_type="GUARD_ALERT",
+                    title=title,
+                    body=body,
+                    data=data,
+                    incident=incident,
+                    guard_alert=guard_alert,
+                )
+            else:
+                # Fallback: no User available, use bare send (no DB log)
+                success = PushNotificationService.send_notification(
+                    expo_token=token,
+                    title=title,
+                    body=body,
+                    data=data,
+                    priority="high",
+                )
+            if success:
+                sent_count += 1
+
+        logger.info(f"[PUSH] Guard alerts: {sent_count}/{len(expo_tokens)} sent successfully")
 
     @staticmethod
     def notify_assignment_confirmed(

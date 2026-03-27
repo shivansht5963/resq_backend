@@ -23,14 +23,17 @@ def login(request):
     Request:
         {
             "email": "user@example.com",
-            "password": "password123"
+            "password": "password123",
+            "expo_token": "ExponentPushToken[...]",  // optional — auto-registers the device
+            "platform": "android"                     // optional (defaults: android)
         }
     
     Response:
         {
             "auth_token": "token_string",
             "user_id": "uuid",
-            "role": "STUDENT"
+            "role": "STUDENT",
+            "device_registered": true    // present when expo_token was provided
         }
     """
     serializer = LoginSerializer(data=request.data)
@@ -38,14 +41,31 @@ def login(request):
     if serializer.is_valid():
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
-        
-        return Response({
+
+        response_data = {
             'auth_token': token.key,
             'user_id': str(user.id),
             'role': user.role,
-        }, status=status.HTTP_200_OK)
+        }
+
+        # --- Auto-register device if expo_token provided ---
+        expo_token = request.data.get('expo_token', '').strip()
+        if expo_token and expo_token.startswith('ExponentPushToken'):
+            platform = request.data.get('platform', Device.Platform.ANDROID)
+            device, _ = Device.objects.update_or_create(
+                token=expo_token,
+                defaults={
+                    'user': user,
+                    'platform': platform,
+                    'is_active': True,
+                }
+            )
+            response_data['device_registered'] = True
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 @api_view(['POST'])
